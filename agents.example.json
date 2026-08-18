@@ -1,0 +1,38 @@
+[
+  {
+    "id": "claude",
+    "name": "CLAUDE",
+    "color": "#00f0ff",
+    "desc": "Claude Code CLI",
+    "adapter": "claude",
+    "modelHint": "claude-sonnet-4-6（留空=默认）",
+    "ctxChars": 900
+  },
+  {
+    "id": "codex",
+    "name": "CODEX",
+    "color": "#ff2fd6",
+    "desc": "Codex CLI",
+    "adapter": "codex",
+    "modelHint": "deepseek-v4-flash（留空=默认）",
+    "ctxChars": 900
+  },
+  {
+    "id": "dsh",
+    "name": "DEEPSEEK",
+    "color": "#7cff4f",
+    "desc": "DSH · headless harness",
+    "adapter": "dsh",
+    "modelHint": "（dsh 无模型参数，仅附加参数生效）",
+    "ctxChars": 1800
+  },
+  {
+    "id": "openclaw",
+    "name": "OPENCLAW",
+    "color": "#b78bff",
+    "desc": "OpenClaw · local gateway",
+    "adapter": "openclaw",
+    "modelHint": "zhipu/glm-5.2（留空=默认）",
+    "ctxChars": 700
+  }
+]

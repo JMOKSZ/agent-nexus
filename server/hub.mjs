@@ -11,7 +11,7 @@ const MAX_HISTORY = 300;
 const MAX_DISPATCH_DEPTH = 4;
 const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill']);
 
-const DISTILL_PROMPT = `你是 NEXUS 多 agent 系统的记忆蒸馏器。下面是系统近期的事件日志（用户与 claude/codex/dsh/openclaw 四个 agent 的交互记录）。
+const DISTILL_PROMPT = `你是 NEXUS 多 agent 系统的记忆蒸馏器。下面是系统近期的事件日志（用户与各 agent 的交互记录）。
 请提炼出值得长期记住的信息，每条一行，严格使用以下格式（除此以外不要输出任何内容）：
 MEMO[fact]: 客观事实（端口、路径、配置、凭据位置等）
 MEMO[decision]: 技术/方案决策及其原因
@@ -26,16 +26,14 @@ MEMO[task]: 进行中的任务状态或结论
 
 事件日志：`;
 
-export const AGENTS = {
-  claude: { name: 'CLAUDE', color: '#00f0ff', desc: 'Claude Code · cc-switch' },
-  codex: { name: 'CODEX', color: '#ff2fd6', desc: 'Codex · DeepSeek API' },
-  dsh: { name: 'DEEPSEEK', color: '#7cff4f', desc: 'DSH · headless harness' },
-  openclaw: { name: 'OPENCLAW', color: '#b78bff', desc: 'OpenClaw · local gateway' },
-};
-
 export class Hub {
-  constructor(adapters) {
+  constructor(adapters, agentsList) {
     this.adapters = adapters;
+    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint }]));
+    this.agentIds = agentsList.map((a) => a.id);
+    const idAlt = this.agentIds.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') || 'a^';
+    this.mentionRe = new RegExp(`^@(${idAlt}|all)\\b\\s*[:：,，]?\\s*([\\s\\S]+)$`, 'i');
+    this.dispatchRe = new RegExp(`^\\s*@(${idAlt})\\b\\s*[:：,，]?\\s*(.+)$`, 'i');
     this.messages = [];
     this.sessions = {}; // agentId -> sessionId
     this.status = {}; // agentId -> {state:'idle'|'running'|'queued'|'error', task?, lastLatencyMs?, lastError?}
@@ -44,7 +42,12 @@ export class Hub {
     this.procs = {}; // agentId -> active child process
     this.gen = {}; // agentId -> queue generation; bump to cancel queued runs
     this.stopped = {}; // agentId -> true when current run was user-stopped
-    for (const id of Object.keys(AGENTS)) this.status[id] = { state: 'idle' };
+    // distiller for /distill: config may pin one ("distiller": true);
+    // otherwise prefer a stateless adapter (cheap, no session pollution)
+    this.distillerId = agentsList.find((a) => a.distiller)?.id
+      || agentsList.find((a) => adapters[a.id]?.stateless)?.id
+      || this.agentIds[0];
+    for (const id of this.agentIds) this.status[id] = { state: 'idle' };
     this.load();
   }
 
@@ -113,7 +116,7 @@ export class Hub {
     } else {
       this.stopped[agentId] = false;
       this.setStatus(agentId, { state: 'idle', task: null });
-      this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${AGENTS[agentId].name} 队列已清空（无运行中的任务）`, kind: 'error' });
+      this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} 队列已清空（无运行中的任务）`, kind: 'error' });
     }
   }
 
@@ -169,11 +172,11 @@ export class Hub {
       if (this.stopped[agentId]) {
         this.stopped[agentId] = false;
         this.setStatus(agentId, { state: 'idle', task: null });
-        this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${AGENTS[agentId].name} 已被手动停止`, kind: 'error' });
+        this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} 已被手动停止`, kind: 'error' });
         return;
       }
       this.setStatus(agentId, { state: 'error', task: null, lastError: String(err.message || err) });
-      this.pushMessage({ from: 'system', to: agentId, text: `⚠ ${AGENTS[agentId].name} error: ${err.message || err}`, kind: 'error' });
+      this.pushMessage({ from: 'system', to: agentId, text: `⚠ ${this.agents[agentId].name} error: ${err.message || err}`, kind: 'error' });
       setTimeout(() => this.setStatus(agentId, { state: 'idle' }), 5000);
     }
   }
@@ -186,14 +189,14 @@ export class Hub {
   scanDispatch(fromAgent, text, depth) {
     const seen = new Set();
     for (const line of text.split('\n')) {
-      const m = line.match(/^\s*@(claude|codex|dsh|openclaw)\b\s*[:：,，]?\s*(.+)$/i);
+      const m = line.match(this.dispatchRe);
       if (!m) continue;
       const target = m[1].toLowerCase();
       const task = m[2].trim();
       if (target === fromAgent || !task || seen.has(target) || !this.adapters[target]) continue;
       seen.add(target);
       const context = buildContextBlock(fromAgent, { maxChars: 1200, eventLimit: 6, query: task });
-      const forwarded = `${context}[from ${AGENTS[fromAgent].name}] ${task}`;
+      const forwarded = `${context}[from ${this.agents[fromAgent].name}] ${task}`;
       this.pushMessage({ from: fromAgent, to: target, text: task, kind: 'dispatch', depth: depth + 1 });
       this.enqueue(target, forwarded, { from: fromAgent, depth: depth + 1 });
     }
@@ -208,7 +211,7 @@ export class Hub {
       if (!m) continue;
       const id = addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: fromAgent });
       if (id != null) {
-        this.pushMessage({ from: 'system', to: 'user', text: `🧠 共享记忆 #${id}（${AGENTS[fromAgent].name} · ${normalizeKind(m[1])}）: ${m[2].trim().slice(0, 120)}`, kind: 'memo' });
+        this.pushMessage({ from: 'system', to: 'user', text: `🧠 共享记忆 #${id}（${this.agents[fromAgent].name} · ${normalizeKind(m[1])}）: ${m[2].trim().slice(0, 120)}`, kind: 'memo' });
       }
     }
   }
@@ -250,53 +253,55 @@ export class Hub {
     }
   }
 
-  // Distillation job: dsh (cheap, stateless) compresses new events since the
-  // last watermark into candidate memories, which land in the staged area
-  // awaiting user approval in the MEMORY panel.
+  // Distillation job: the distiller agent (config "distiller": true, else the
+  // first stateless adapter) compresses new events since the last watermark
+  // into candidate memories, which land in the staged area awaiting user
+  // approval in the MEMORY panel.
   async runDistill() {
-    const adapter = this.adapters.dsh;
+    const did = this.distillerId;
+    const adapter = this.adapters[did];
     const say = (text) => this.pushMessage({ from: 'system', to: 'user', text, kind: 'memo' });
-    if (!adapter) { say('蒸馏器不可用（缺少 dsh adapter）。'); return; }
+    if (!adapter) { say('蒸馏器不可用（agents 配置里没有可运行的 agent）。'); return; }
     const watermark = Number(getMeta('last_distill_event_id') || 0);
     const evs = eventsSince(watermark);
     if (!evs.length) { say('没有新事件需要蒸馏。'); return; }
-    const prev = this.queues.dsh || Promise.resolve();
+    const prev = this.queues[did] || Promise.resolve();
     const job = prev.then(async () => {
-      this.setStatus('dsh', { state: 'running', task: '🧪 蒸馏共享记忆…' });
+      this.setStatus(did, { state: 'running', task: '🧪 蒸馏共享记忆…' });
       try {
         const { text } = await adapter.run({
           text: DISTILL_PROMPT + evs.map((e) => e.line).join('\n'),
           attachments: [],
           onDelta: () => {},
-          onSpawn: (c) => { this.procs.dsh = c; },
+          onSpawn: (c) => { this.procs[did] = c; },
         });
-        delete this.procs.dsh;
+        delete this.procs[did];
         let count = 0;
         for (const line of (text || '').split('\n')) {
           const m = line.match(/^\s*MEMO(?:\[(\w+)\])?\s*[:：]\s*(.+)$/i);
           if (!m) continue;
-          if (addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: 'distill:dsh', status: 'staged' }) != null) count++;
+          if (addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: `distill:${did}`, status: 'staged' }) != null) count++;
         }
         setMeta('last_distill_event_id', evs[evs.length - 1].id);
-        this.setStatus('dsh', { state: 'idle', task: null });
+        this.setStatus(did, { state: 'idle', task: null });
         say(count
           ? `🧪 蒸馏完成：${count} 条候选记忆进入待审批区（MEMORY 面板里 ✓ 批准 / ✕ 停用）`
           : '🧪 蒸馏完成：这段日志没有提炼出新的长期记忆。');
       } catch (err) {
-        delete this.procs.dsh;
-        this.setStatus('dsh', { state: 'idle', task: null });
+        delete this.procs[did];
+        this.setStatus(did, { state: 'idle', task: null });
         say(`⚠ 蒸馏失败: ${err.message || err}`);
       }
     });
-    this.queues.dsh = job.catch(() => {});
-    say(`🧪 蒸馏作业已排队：${evs.length} 条新事件，由 DEEPSEEK 提炼…`);
+    this.queues[did] = job.catch(() => {});
+    say(`🧪 蒸馏作业已排队：${evs.length} 条新事件，由 ${this.agents[did].name} 提炼…`);
     return job;
   }
 
   handleUserInput(raw, attachments = []) {
     let to = 'broadcast';
     let text = raw.trim();
-    const m = text.match(/^@(claude|codex|dsh|openclaw|all)\b\s*[:：,，]?\s*([\s\S]+)$/i);
+    const m = text.match(this.mentionRe);
     if (m) {
       to = m[1].toLowerCase() === 'all' ? 'broadcast' : m[1].toLowerCase();
       text = m[2].trim();
@@ -317,14 +322,14 @@ export class Hub {
       this.handleCommand(to, text);
       return;
     }
-    const targets = to === 'broadcast' ? Object.keys(this.adapters) : [to];
+    const targets = to === 'broadcast' ? this.agentIds : [to];
     for (const t of targets) this.enqueue(t, text, { from: 'user', attachments });
   }
 
   // Slash commands run immediately (outside the agent queue) and never reach
   // the headless CLI, which would only reject them.
   async handleCommand(agentId, cmdline) {
-    const name = AGENTS[agentId].name;
+    const name = this.agents[agentId].name;
     const sp = cmdline.indexOf(' ');
     const cmd = (sp < 0 ? cmdline.slice(1) : cmdline.slice(1, sp)).toLowerCase();
     const args = sp < 0 ? '' : cmdline.slice(sp + 1);
@@ -364,7 +369,7 @@ export class Hub {
 
   snapshot() {
     return {
-      agents: Object.fromEntries(Object.entries(AGENTS).map(([id, a]) => [id, { ...a, ...this.status[id], session: this.sessions[id] || null }])),
+      agents: Object.fromEntries(Object.entries(this.agents).map(([id, a]) => [id, { ...a, ...this.status[id], session: this.sessions[id] || null }])),
       messages: this.messages.slice(-MAX_HISTORY),
     };
   }

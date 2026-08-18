@@ -1,5 +1,5 @@
 /* NEXUS Command Deck — frontend client */
-const AGENT_ORDER = ['claude', 'codex', 'dsh', 'openclaw'];
+let AGENT_ORDER = []; // derived from the server's configured agent roster
 const state = {
   agents: {},          // id -> {name,color,desc,state,task,lastLatencyMs,session}
   target: 'broadcast',
@@ -16,8 +16,11 @@ const fmtTime = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false
 /* ── build terminals ── */
 function buildDeck(agents) {
   state.agents = agents;
+  AGENT_ORDER = Object.keys(agents);
   const quad = $('#quad');
   quad.innerHTML = '';
+  const n = AGENT_ORDER.length;
+  quad.style.gridTemplateColumns = n === 1 ? '1fr' : '1fr 1fr';
   for (const id of AGENT_ORDER) {
     const a = agents[id];
     if (!a) continue;
@@ -103,12 +106,6 @@ const THEME_SW = {
   amber: '#ffb000',
   arctic: '#0077cc',
 };
-const MODEL_HINTS = {
-  claude: 'claude-sonnet-4-6（留空=默认）',
-  codex: 'deepseek-v4-flash（留空=默认）',
-  dsh: '（dsh 无模型参数，仅附加参数生效）',
-  openclaw: 'zhipu/glm-5.2（留空=默认）',
-};
 
 function applyUI(ui) {
   document.body.dataset.theme = ui.theme === 'cyberpunk' ? '' : ui.theme;
@@ -134,7 +131,7 @@ function buildSettings() {
     const cfg = s.agents[id] || {};
     return `<div class="set-agent" style="--ac:${a?.color || '#888'}">
       <span class="sa-name">${a?.name || id.toUpperCase()}</span>
-      <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${MODEL_HINTS[id] || '模型（留空=默认）'}" spellcheck="false">
+      <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${esc(a?.modelHint || '') || '模型（留空=默认）'}" spellcheck="false">
       <input id="sa-${id}" value="${esc(cfg.extraArgs || '')}" placeholder='附加参数，如 --flag value（原样追加到 CLI）' spellcheck="false">
       <input id="sc-${id}" type="number" min="0" max="4000" step="100" value="${cfg.ctxChars ?? ''}" placeholder="上下文预算字符数（0=关闭注入）" title="注入到该 agent prompt 的共享记忆/上下文预算（字符）">
     </div>`;

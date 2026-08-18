@@ -1,16 +1,18 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
+import { loadAgentsConfig } from './agents-config.mjs';
 
 const FILE = join(homedir(), '.agent-nexus', 'settings.json');
 
+// Agent set comes from agents.json (user) / agents.example.json (repo);
+// per-agent ctxChars default may be set in the config entry.
+const agentDefaults = () => Object.fromEntries(
+  loadAgentsConfig().map((a) => [a.id, { model: '', extraArgs: '', ctxChars: a.ctxChars ?? 900 }]),
+);
+
 const DEFAULTS = {
-  agents: {
-    claude: { model: '', extraArgs: '', ctxChars: 900 },
-    codex: { model: '', extraArgs: '', ctxChars: 900 },
-    dsh: { model: '', extraArgs: '', ctxChars: 1800 },
-    openclaw: { model: '', extraArgs: '', ctxChars: 700 },
-  },
+  agents: agentDefaults(),
   ui: { theme: 'cyberpunk', focusOpacity: 0.7 },
 };
 

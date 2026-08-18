@@ -9,10 +9,8 @@ import { Hub } from './hub.mjs';
 import { UPLOAD_DIR } from './runner.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
 import { listMemories, recallMemories, addMemory, retireMemory, approveMemory, restoreMemory, updateMemory, listAllMemories, listStaged, normalizeKind } from './memory.mjs';
-import { claudeAdapter } from './adapters/claude.mjs';
-import { codexAdapter } from './adapters/codex.mjs';
-import { dshAdapter } from './adapters/dsh.mjs';
-import { openclawAdapter } from './adapters/openclaw.mjs';
+import { ADAPTER_TYPES } from './adapters/index.mjs';
+import { loadAgentsConfig } from './agents-config.mjs';
 
 const PORT = Number(process.env.NEXUS_PORT || 7700);
 const HOST = '127.0.0.1';
@@ -27,7 +25,13 @@ const saveManifest = () => {
   try { writeFileSync(MANIFEST_PATH, JSON.stringify(manifest)); } catch { /* non-fatal */ }
 };
 
-const hub = new Hub({ claude: claudeAdapter, codex: codexAdapter, dsh: dshAdapter, openclaw: openclawAdapter });
+const agentsList = loadAgentsConfig().filter((a) => {
+  if (ADAPTER_TYPES[a.adapter]) return true;
+  console.warn(`[agent-nexus] skipping agent "${a.id}": unknown adapter type "${a.adapter}"`);
+  return false;
+});
+const adapters = Object.fromEntries(agentsList.map((a) => [a.id, ADAPTER_TYPES[a.adapter]]));
+const hub = new Hub(adapters, agentsList);
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 

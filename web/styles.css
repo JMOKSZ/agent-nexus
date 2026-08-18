@@ -98,7 +98,7 @@ body {
 
 /* ── deck layout ── */
 #deck { z-index: 2; flex: 1; display: flex; gap: 12px; padding: 12px; min-height: 0; }
-#quad { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px; min-width: 0; }
+#quad { flex: 1; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 12px; min-width: 0; }
 
 /* ── agent terminal ── */
 .term {
