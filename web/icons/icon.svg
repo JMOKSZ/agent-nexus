@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2d4a"/>
+      <stop offset="1" stop-color="#1b1c2e"/>
+    </linearGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#9be7d8" stroke-opacity="0.06" stroke-width="2"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#grid)"/>
+
+  <!-- glow layer -->
+  <polygon points="812,512 662,771.6 362,771.6 212,512 362,252.4 662,252.4"
+           fill="none" stroke="#9be7d8" stroke-width="56" stroke-linejoin="round" filter="url(#glow)" opacity="0.85"/>
+  <!-- crisp hexagon -->
+  <polygon points="812,512 662,771.6 362,771.6 212,512 362,252.4 662,252.4"
+           fill="none" stroke="#d8fff4" stroke-width="44" stroke-linejoin="round"/>
+  <!-- vertex nodes -->
+  <g fill="#9be7d8">
+    <circle cx="812" cy="512" r="30"/>
+    <circle cx="662" cy="771.6" r="30"/>
+    <circle cx="362" cy="771.6" r="30"/>
+    <circle cx="212" cy="512" r="30"/>
+    <circle cx="362" cy="252.4" r="30"/>
+    <circle cx="662" cy="252.4" r="30"/>
+  </g>
+  <!-- nexus core -->
+  <circle cx="512" cy="512" r="46" fill="#9be7d8" filter="url(#glow)"/>
+  <circle cx="512" cy="512" r="34" fill="#eafffa"/>
+</svg>

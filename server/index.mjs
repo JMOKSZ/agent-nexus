@@ -46,7 +46,7 @@ termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
 
 const wss = new WebSocketServer({ noServer: true });
 
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.icns': 'image/icns', '.webmanifest': 'application/manifest+json' };
 
 function readBody(req, limit = 8e6) {
   return new Promise((resolve, reject) => {
