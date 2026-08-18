@@ -28,7 +28,7 @@ body[data-theme="dark"] {
   --brand: #b8a9e8; --user: #f2c9a0; --danger: #e89cae; --ok: #9ed4a8;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body { height: 100%; }
 body {
@@ -309,8 +309,65 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 #send-btn:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 30%, transparent), color-mix(in srgb, var(--brand) 12%, transparent)); box-shadow: 0 0 18px color-mix(in srgb, var(--brand) 35%, transparent); }
 #send-btn:active { transform: scale(.97); }
 
+/* ── tablet / iPad (≤1100px): terminals stack vertically, feed becomes a drawer ── */
+#feed-btn { display: none; }
 @media (max-width: 1100px) {
-  #feed-panel { display: none; }
+  #deck { flex-direction: column; overflow-y: auto; }
+  #quad {
+    grid-template-columns: 1fr !important; /* overrides JS inline template */
+    grid-auto-rows: minmax(340px, 46vh);
+    flex: none;
+  }
+  #feed-panel {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 45;
+    width: min(360px, 88vw);
+    border-radius: 0; border: none; border-left: 1px solid var(--line);
+    box-shadow: -18px 0 50px rgba(0, 0, 0, .4);
+    transform: translateX(102%); transition: transform .25s ease;
+  }
+  #feed-panel.open { transform: translateX(0); }
+  #feed-btn {
+    display: block;
+    background: none; border: 1px solid var(--line); color: var(--dim);
+    font-family: var(--mono); font-size: 12px; padding: 3px 9px; border-radius: 5px; cursor: pointer;
+    transition: all .2s;
+  }
+  #feed-btn:hover, #feed-btn.on { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 10px color-mix(in srgb, var(--brand) 30%, transparent); }
+  .term.focused { top: 52px; left: 8px; right: 8px; bottom: 8px; }
+  #settings-panel, #memmgr-panel { width: 94vw; max-height: 90vh; }
+}
+
+/* ── phone (≤700px) ── */
+@media (max-width: 700px) {
+  body { font-size: 12px; }
+  #topbar { padding: 8px 10px; padding-top: calc(8px + env(safe-area-inset-top)); }
+  .brand-sub, .clock { display: none; }
+  .brand-name { font-size: 15px; letter-spacing: 2px; }
+  .brand-hex { font-size: 16px; }
+  .top-status { gap: 8px; }
+  #deck { padding: 8px; gap: 8px; }
+  #quad { grid-auto-rows: minmax(300px, 52vh); gap: 8px; }
+  .term-head { padding: 8px 10px; flex-wrap: wrap; }
+  .term-head .a-latency { display: none; }
+  .msg { max-width: 96%; font-size: 12px; }
+  #cmdbar {
+    flex-wrap: wrap; gap: 8px; padding: 8px 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+  .chips {
+    order: -1; width: 100%; padding-bottom: 0;
+    overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip { flex-shrink: 0; }
+  .input-wrap { flex: 1 1 calc(100% - 84px); }
+  #cmd-input { font-size: 16px; } /* ≥16px stops iOS focus zoom */
+  #send-btn { padding: 10px 12px; font-size: 11px; }
+  #feed-panel { width: 100vw; border-left: none; }
+  #settings-overlay, #memmgr-overlay { align-items: stretch; }
+  #settings-panel, #memmgr-panel { width: 100vw; max-height: 100dvh; border-radius: 0; }
+  .set-agent { grid-template-columns: 1fr; }
+  .set-agent .sa-name { grid-row: auto; }
 }
 
 /* ── focus mode (single-agent full-window popup) ── */

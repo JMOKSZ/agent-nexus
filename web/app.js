@@ -171,6 +171,11 @@ $('#settings-btn').addEventListener('click', () => {
   $('#set-status').textContent = '';
   $('#settings-overlay').hidden = false;
 });
+$('#feed-btn').addEventListener('click', () => {
+  const p = $('#feed-panel');
+  p.classList.toggle('open');
+  $('#feed-btn').classList.toggle('on', p.classList.contains('open'));
+});
 $('#clear-btn').addEventListener('click', async () => {
   if (!confirm('清除全部窗口的显示内容？\n共享记忆与事件日志（蒸馏源）不受影响。')) return;
   await fetch('/api/display/clear', { method: 'POST' });
@@ -550,6 +555,16 @@ function autoGrow() {
   input.style.height = Math.min(input.scrollHeight, 120) + 'px';
 }
 
+/* shorter placeholder on phones so it doesn't clip in the single-row textarea */
+const PHONE_MQ = matchMedia('(max-width: 700px)');
+const applyPlaceholder = () => {
+  $('#cmd-input').placeholder = PHONE_MQ.matches
+    ? '广播到全部；@名 定向；📎 附件…'
+    : '广播到全部 agent；@agent名 定向；📎 或拖拽添加附件；Shift+Enter 发送…';
+};
+PHONE_MQ.addEventListener('change', applyPlaceholder);
+applyPlaceholder();
+
 $('#cmd-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); send(); }
 });
@@ -563,6 +578,10 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('#memmgr-overlay').hidden) $('#memmgr-overlay').hidden = true;
   else if (!$('#settings-overlay').hidden) closeSettings(true);
+  else if ($('#feed-panel').classList.contains('open')) {
+    $('#feed-panel').classList.remove('open');
+    $('#feed-btn').classList.remove('on');
+  }
   else if (state.target !== 'broadcast') setTarget('broadcast');
 });
 
