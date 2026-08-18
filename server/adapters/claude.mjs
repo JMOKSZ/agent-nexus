@@ -65,6 +65,13 @@ const fmtAge = (mtime) => {
 
 const projectOf = (cwd) => (cwd ? basename(cwd) : '?');
 
+// Sessions written within the last 10 min are likely live elsewhere (e.g. an
+// interactive claude) — they get flagged in listings and never auto-picked.
+const LIVE_MS = 10 * 60 * 1000;
+const isLive = (s) => Date.now() - s.mtime < LIVE_MS;
+const listLine = (s) =>
+  `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)}${isLive(s) ? ' · ⚡活跃中' : ''} · ${s.snippet}`;
+
 // Normalize legacy string session state.
 const asSession = (s) => (s ? (typeof s === 'string' ? { id: s, cwd: null } : s) : null);
 
@@ -153,31 +160,22 @@ export const claudeAdapter = {
     if (cmd === 'sessions') {
       const list = listSessions(10);
       if (!list.length) return { text: '没有找到任何 claude 会话。' };
-      const lines = list.map((s) =>
-        `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)} · ${s.snippet}`);
-      return { text: `最近的 claude 会话（用 /resume <前缀> 恢复）:\n${lines.join('\n')}` };
+      return { text: `最近的 claude 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${list.map(listLine).join('\n')}` };
     }
     if (cmd === 'resume') {
       const all = listSessions(100);
       if (!all.length) return { text: '没有找到任何 claude 会话。' };
       const arg = args.trim();
-      let pick;
       if (!arg) {
-        // Sessions written within the last 10 min are likely live elsewhere
-        // (e.g. an interactive claude) — never auto-pick one.
-        const LIVE_MS = 10 * 60 * 1000;
-        const idle = all.filter((s) => Date.now() - s.mtime > LIVE_MS);
-        if (!idle.length) {
-          return { text: `最近的 ${all.length} 个会话都在 10 分钟内有写入，大概率正在别处使用，不自动恢复。\n用 /sessions 查看，再 /resume <前缀> 显式选择（会以分叉方式接续，不影响原会话）。` };
-        }
-        pick = idle[0];
-      } else {
+        // No arg → show the picker list instead of guessing a session.
+        return { text: `最近的 claude 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${all.slice(0, 10).map(listLine).join('\n')}\n\n用 /resume <前缀> 恢复（以分叉方式接续，原会话不会被修改）。` };
+      }
+      let pick;
+      {
         const matches = all.filter((s) => s.id.startsWith(arg));
         if (matches.length === 0) return { text: `没有匹配 "${arg}" 的会话。用 /sessions 查看列表。` };
         if (matches.length > 1) {
-          const lines = matches.slice(0, 8).map((s) =>
-            `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)} · ${s.snippet}`);
-          return { text: `"${arg}" 匹配到多个会话，请加长前缀:\n${lines.join('\n')}` };
+          return { text: `"${arg}" 匹配到多个会话，请加长前缀:\n${matches.slice(0, 8).map(listLine).join('\n')}` };
         }
         pick = matches[0];
       }
