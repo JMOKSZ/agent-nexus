@@ -67,7 +67,7 @@ function buildDeck(agents) {
 /* ── command bar chips ── */
 function buildChips() {
   const chips = $('#chips');
-  const defs = [['broadcast', 'ALL', '#00f0ff'], ...AGENT_ORDER.map((id) => [id, state.agents[id]?.name || id.toUpperCase(), state.agents[id]?.color || '#888'])];
+  const defs = [['broadcast', 'ALL', 'var(--brand)'], ...AGENT_ORDER.map((id) => [id, state.agents[id]?.name || id.toUpperCase(), state.agents[id]?.color || '#888'])];
   chips.innerHTML = '';
   for (const [id, label, color] of defs) {
     const c = document.createElement('button');
@@ -100,15 +100,14 @@ function applyFocus() {
 
 /* ── settings / skins ── */
 const THEME_SW = {
-  cyberpunk: '#00f0ff',
-  matrix: '#00ff41',
-  synthwave: '#ff71ce',
-  amber: '#ffb000',
-  arctic: '#0077cc',
+  cyber: '#9be7d8',
+  light: '#7ccfc0',
+  dark: '#b8a9e8',
 };
+const THEME_LABEL = { cyber: 'CYBER', light: '明亮', dark: '暗黑' };
 
 function applyUI(ui) {
-  document.body.dataset.theme = ui.theme === 'cyberpunk' ? '' : ui.theme;
+  document.body.dataset.theme = ui.theme === 'cyber' ? '' : ui.theme;
   document.documentElement.style.setProperty('--focus-op', ui.focusOpacity);
   $('#op-val').textContent = `${Math.round(ui.focusOpacity * 100)}%`;
   $('#set-opacity').value = Math.round(ui.focusOpacity * 100);
@@ -118,7 +117,7 @@ function applyUI(ui) {
 
 function currentUiDraft() {
   return {
-    theme: document.querySelector('.swatch.active')?.dataset.theme || state.settings?.ui.theme || 'cyberpunk',
+    theme: document.querySelector('.swatch.active')?.dataset.theme || state.settings?.ui.theme || 'cyber',
     focusOpacity: Number($('#set-opacity').value) / 100,
   };
 }
@@ -129,16 +128,25 @@ function buildSettings() {
   $('#set-agents').innerHTML = AGENT_ORDER.map((id) => {
     const a = state.agents[id];
     const cfg = s.agents[id] || {};
+    const extra = (s.fields?.[id] || []).map((f) => {
+      const val = cfg[f.key] ?? '';
+      const input = f.options
+        ? `<select id="sx-${id}-${f.key}" title="${esc(f.label)}">${f.options.map((o) => `<option value="${o.value}"${o.value === val ? ' selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`
+        : `<input id="sx-${id}-${f.key}" value="${esc(val)}" placeholder="${esc(f.label)}" spellcheck="false">`;
+      return input;
+    }).join('');
+    const rows = 3 + (s.fields?.[id]?.length || 0);
     return `<div class="set-agent" style="--ac:${a?.color || '#888'}">
-      <span class="sa-name">${a?.name || id.toUpperCase()}</span>
+      <span class="sa-name" style="grid-row: span ${rows}">${a?.name || id.toUpperCase()}</span>
       <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${esc(a?.modelHint || '') || '模型（留空=默认）'}" spellcheck="false">
       <input id="sa-${id}" value="${esc(cfg.extraArgs || '')}" placeholder='附加参数，如 --flag value（原样追加到 CLI）' spellcheck="false">
       <input id="sc-${id}" type="number" min="0" max="4000" step="100" value="${cfg.ctxChars ?? ''}" placeholder="上下文预算字符数（0=关闭注入）" title="注入到该 agent prompt 的共享记忆/上下文预算（字符）">
+      ${extra}
     </div>`;
   }).join('');
   $('#set-themes').innerHTML = Object.entries(THEME_SW).map(([t, c]) =>
     `<button class="swatch" data-theme="${t}" style="--sc:${c}">
-      <span class="sw-dot" style="background:radial-gradient(circle at 35% 35%, ${c}, ${c}33 70%)"></span>${t.toUpperCase()}
+      <span class="sw-dot" style="background:radial-gradient(circle at 35% 35%, ${c}, ${c}33 70%)"></span>${THEME_LABEL[t] || t.toUpperCase()}
     </button>`).join('');
   document.querySelectorAll('.swatch').forEach((b) =>
     b.addEventListener('click', () => {
@@ -153,7 +161,7 @@ async function loadSettings() {
   try {
     state.settings = await (await fetch('/api/settings')).json();
   } catch {
-    state.settings = { agents: {}, ui: { theme: 'cyberpunk', focusOpacity: 0.7 } };
+    state.settings = { agents: {}, ui: { theme: 'cyber', focusOpacity: 0.7 } };
   }
   buildSettings();
 }
@@ -186,6 +194,10 @@ $('#set-save').addEventListener('click', async () => {
       // empty field keeps the previously saved budget instead of zeroing it
       ctxChars: ctx === '' ? (state.settings?.agents[id]?.ctxChars ?? 900) : Number(ctx),
     };
+    for (const f of state.settings?.fields?.[id] || []) {
+      const el = $(`#sx-${id}-${f.key}`);
+      if (el) agents[id][f.key] = el.value.trim();
+    }
   }
   const res = await fetch('/api/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -402,7 +414,7 @@ function renderStatus({ agent, state: st, task, lastLatencyMs }) {
   const tled = $(`#tled-${agent}`);
   if (tled) {
     tled.className = `top-led ${st === 'running' ? 'running' : ''}`;
-    tled.style.background = st === 'idle' || st === 'running' ? state.agents[agent]?.color : st === 'error' ? 'var(--danger)' : '#22304a';
+    tled.style.background = st === 'idle' || st === 'running' ? state.agents[agent]?.color : st === 'error' ? 'var(--danger)' : 'var(--line)';
     tled.style.boxShadow = st === 'idle' || st === 'running' ? `0 0 8px ${state.agents[agent]?.color}` : 'none';
   }
 }

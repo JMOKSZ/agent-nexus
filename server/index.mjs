@@ -85,8 +85,10 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === '/api/settings' && req.method === 'GET') {
+    const fields = Object.fromEntries(agentsList.map((a) =>
+      [a.id, ADAPTER_TYPES[a.adapter].settingFields || []]));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(loadSettings()));
+    res.end(JSON.stringify({ ...loadSettings(), fields }));
     return;
   }
 
@@ -164,8 +166,13 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/settings' && req.method === 'POST') {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
+    const extraAllowed = Object.fromEntries(agentsList.map((a) =>
+      [a.id, (ADAPTER_TYPES[a.adapter].settingFields || []).map((f) => f.key)]));
+    const saved = saveSettings(body, extraAllowed);
+    const fields = Object.fromEntries(agentsList.map((a) =>
+      [a.id, ADAPTER_TYPES[a.adapter].settingFields || []]));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(saveSettings(body)));
+    res.end(JSON.stringify({ ...saved, fields }));
     return;
   }
 

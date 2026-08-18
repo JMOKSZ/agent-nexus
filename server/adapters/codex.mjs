@@ -77,21 +77,38 @@ const projectOf = (cwd) => (cwd ? basename(cwd) : '?');
 
 export const codexAdapter = {
   id: 'codex',
-  slashCommands: ['sessions', 'resume', 'status'],
+  slashCommands: ['sessions', 'resume', 'fork', 'status'],
+  settingFields: [
+    {
+      key: 'sandbox', label: '沙箱模式 (-s)',
+      options: [
+        { value: '', label: '默认（config.toml）' },
+        { value: 'read-only', label: 'read-only 只读' },
+        { value: 'workspace-write', label: 'workspace-write 工作区可写' },
+        { value: 'danger-full-access', label: 'danger-full-access 完全放行（危险）' },
+      ],
+    },
+  ],
 
   async run({ text, session, attachments = [], onDelta, onSpawn = () => {} }) {
+    // session state: plain thread id, or {id, fork:true} after /fork
+    const sid = typeof session === 'string' ? session : session?.id;
+    const forking = typeof session === 'object' && session?.fork;
     const images = attachments.filter((a) => a.mime.startsWith('image/'));
     const others = attachments.filter((a) => !a.mime.startsWith('image/'));
     const prompt = text + (others.length ? attachmentNote(others) : '');
-    const args = session
-      ? ['exec', 'resume', '--json', '--skip-git-repo-check', session, prompt]
-      : ['exec', '--json', '--skip-git-repo-check', prompt];
+    const args = forking
+      ? ['exec', 'fork', '--json', '--skip-git-repo-check', sid, prompt]
+      : sid
+        ? ['exec', 'resume', '--json', '--skip-git-repo-check', sid, prompt]
+        : ['exec', '--json', '--skip-git-repo-check', prompt];
     const cfg = getAgentCfg('codex');
-    if (cfg.model) args.push('-c', `model="${cfg.model}"`);
+    if (cfg.model) args.push('-m', cfg.model);
+    if (cfg.sandbox) args.push('-s', cfg.sandbox);
     args.push(...splitArgs(cfg.extraArgs));
     // images are real vision input, not just path references
     for (const img of images) args.push('--image', img.path);
-    let threadId = session || null;
+    let threadId = sid || null;
     let finalText = '';
     let usage = null;
     const { code, stderr } = await runCli(CODEX_BIN, args, {
@@ -115,10 +132,20 @@ export const codexAdapter = {
 
   async handleCommand(cmd, args, currentSession) {
     if (cmd === 'status') {
+      const sid = typeof currentSession === 'string' ? currentSession : currentSession?.id;
+      const cfg = getAgentCfg('codex');
       return {
-        text: currentSession
-          ? `CODEX 状态:\n• 线程: ${String(currentSession).slice(0, 13)}…\n• 模型: deepseek-v4-flash (DeepSeek API)\n• 续接模式: exec resume 生效中\n• 清空: /clear`
-          : 'CODEX 状态:\n• 线程: 无（下条消息开启新线程）\n• 模型: deepseek-v4-flash (DeepSeek API)',
+        text: sid
+          ? `CODEX 状态:\n• 线程: ${String(sid).slice(0, 13)}…\n• 模型: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}\n• 沙箱: ${cfg.sandbox || '默认'}\n• 续接模式: exec resume 生效中\n• 清空: /clear · 分叉: /fork`
+          : `CODEX 状态:\n• 线程: 无（下条消息开启新线程）\n• 模型: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}`,
+      };
+    }
+    if (cmd === 'fork') {
+      const sid = typeof currentSession === 'string' ? currentSession : currentSession?.id;
+      if (!sid) return { text: '当前没有活动线程，无法分叉。先正常对话建立线程。' };
+      return {
+        session: { id: sid, fork: true },
+        text: `⑂ 下条消息将从线程 ${String(sid).slice(0, 8)} 分叉出新线程（原线程保持不变）。`,
       };
     }
     if (cmd === 'sessions') {

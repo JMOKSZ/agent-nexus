@@ -70,15 +70,35 @@ const asSession = (s) => (s ? (typeof s === 'string' ? { id: s, cwd: null } : s)
 
 export const claudeAdapter = {
   id: 'claude',
-  slashCommands: ['sessions', 'resume', 'status'],
+  slashCommands: ['sessions', 'resume', 'fork', 'status'],
+  settingFields: [
+    {
+      key: 'effort', label: '推理强度 (--effort)',
+      options: [
+        { value: '', label: '默认' },
+        { value: 'low', label: 'low' },
+        { value: 'medium', label: 'medium' },
+        { value: 'high', label: 'high' },
+        { value: 'xhigh', label: 'xhigh' },
+        { value: 'max', label: 'max' },
+      ],
+    },
+    {
+      key: 'fallbackModel', label: '备用模型 (--fallback-model，过载时自动切换)',
+      options: null, // free text
+    },
+  ],
 
   async run({ text, session, attachments = [], onDelta, onSpawn = () => {} }) {
     const s = asSession(session);
     const cfg = getAgentCfg('claude');
     const args = ['-p', text + (attachments.length ? attachmentNote(attachments) : ''), '--output-format', 'stream-json', '--verbose'];
     if (cfg.model) args.push('--model', cfg.model);
+    if (cfg.effort) args.push('--effort', cfg.effort);
+    if (cfg.fallbackModel) args.push('--fallback-model', cfg.fallbackModel);
     args.push(...splitArgs(cfg.extraArgs));
     if (s?.id) args.push('--resume', s.id);
+    if (s?.fork) args.push('--fork-session'); // resume into a new session id, original untouched
     if (attachments.length) args.push('--add-dir', UPLOAD_DIR);
     let newSession = s;
     let finalText = '';
@@ -115,10 +135,19 @@ export const claudeAdapter = {
   async handleCommand(cmd, args, currentSession) {
     if (cmd === 'status') {
       const s = asSession(currentSession);
+      const cfg = getAgentCfg('claude');
       return {
         text: s
-          ? `CLAUDE 状态:\n• 会话: ${s.id.slice(0, 8)}（项目 ${projectOf(s.cwd)}）\n• 续接模式: --resume 生效中\n• 清空: /clear`
+          ? `CLAUDE 状态:\n• 会话: ${s.id.slice(0, 8)}（项目 ${projectOf(s.cwd)}）\n• 续接模式: --resume 生效中\n• 推理强度: ${cfg.effort || '默认'}\n• 清空: /clear · 分叉: /fork`
           : 'CLAUDE 状态:\n• 会话: 无（下条消息开启新会话）',
+      };
+    }
+    if (cmd === 'fork') {
+      const s = asSession(currentSession);
+      if (!s) return { text: '当前没有活动会话，无法分叉。先正常对话建立会话。' };
+      return {
+        session: { ...s, fork: true },
+        text: `⑂ 下条消息将从会话 ${s.id.slice(0, 8)} 分叉出新会话（原会话保持不变）。`,
       };
     }
     if (cmd === 'sessions') {

@@ -23,6 +23,22 @@ function mirrorToInbox(atts) {
 export const openclawAdapter = {
   id: 'openclaw',
   slashCommands: ['status'],
+  settingFields: [
+    {
+      key: 'thinking', label: '思考级别 (--thinking)',
+      options: [
+        { value: '', label: '默认' },
+        { value: 'off', label: 'off 关闭' },
+        { value: 'minimal', label: 'minimal' },
+        { value: 'low', label: 'low' },
+        { value: 'medium', label: 'medium' },
+        { value: 'high', label: 'high' },
+        { value: 'xhigh', label: 'xhigh' },
+        { value: 'adaptive', label: 'adaptive 自适应' },
+        { value: 'max', label: 'max' },
+      ],
+    },
+  ],
   async run({ text, session, attachments = [], onDelta, onSpawn = () => {} }) {
     const sid = session || `nexus-${randomUUID().slice(0, 8)}`;
     const prompt = attachments.length
@@ -31,6 +47,7 @@ export const openclawAdapter = {
     const cfg = getAgentCfg('openclaw');
     const args = ['agent', '--agent', 'main', '--session-id', sid, '-m', prompt, '--json'];
     if (cfg.model) args.push('--model', cfg.model);
+    if (cfg.thinking) args.push('--thinking', cfg.thinking);
     args.push(...splitArgs(cfg.extraArgs));
     const { code, stdout, stderr } = await runCli('openclaw', args, { timeoutMs: 600_000, onSpawn });
     const clean = stripAnsi(stdout);
@@ -79,6 +96,7 @@ export const openclawAdapter = {
         `• 主模型: ${model}${fallbacks.length ? `（fallback: ${fallbacks.join(', ')}）` : ''}`,
         `• 通道: ${channels.length ? channels.join(' + ') : '无'}`,
         `• nexus 会话: ${currentSession ? String(currentSession) : '无（下条消息开启新会话）'}`,
+        `• nexus 思考级别: ${getAgentCfg('openclaw').thinking || '默认'}`,
       ].join('\n'),
     };
   },

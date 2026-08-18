@@ -13,10 +13,10 @@ const agentDefaults = () => Object.fromEntries(
 
 const DEFAULTS = {
   agents: agentDefaults(),
-  ui: { theme: 'cyberpunk', focusOpacity: 0.7 },
+  ui: { theme: 'cyber', focusOpacity: 0.7 },
 };
 
-export const THEMES = ['cyberpunk', 'matrix', 'synthwave', 'amber', 'arctic'];
+export const THEMES = ['cyber', 'light', 'dark'];
 
 let cache = null;
 
@@ -30,23 +30,30 @@ export function loadSettings() {
         [id, { ...DEFAULTS.agents[id], ...(d.agents?.[id] || {}) }])),
       ui: { ...DEFAULTS.ui, ...d.ui },
     };
+    if (!THEMES.includes(cache.ui.theme)) cache.ui.theme = DEFAULTS.ui.theme;
   } catch {
     cache = structuredClone(DEFAULTS);
   }
   return cache;
 }
 
-export function saveSettings(patch) {
+export function saveSettings(patch, extraAllowed = {}) {
   const cur = loadSettings();
   if (patch?.agents && typeof patch.agents === 'object') {
     for (const [k, v] of Object.entries(patch.agents)) {
       if (!(k in cur.agents) || !v) continue;
       const ctx = Number(v.ctxChars);
-      cur.agents[k] = {
+      const next = {
         model: String(v.model || '').slice(0, 160),
         extraArgs: String(v.extraArgs || '').slice(0, 300),
         ctxChars: Number.isFinite(ctx) ? Math.min(4000, Math.max(0, Math.round(ctx))) : (cur.agents[k].ctxChars ?? 900),
       };
+      // adapter-declared extra fields (effort/sandbox/thinking/…), strings only
+      for (const key of extraAllowed[k] || []) {
+        if (v[key] !== undefined) next[key] = String(v[key]).slice(0, 160);
+        else if (cur.agents[k][key] !== undefined) next[key] = cur.agents[k][key];
+      }
+      cur.agents[k] = next;
     }
   }
   if (patch?.ui) {
