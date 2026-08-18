@@ -1,5 +1,8 @@
 import { spawn } from 'node-pty';
 import { homedir } from 'node:os';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 // Real interactive terminal sessions for agents configured with "terminal": true.
 // One persistent PTY per agent; web clients attach over WebSocket and get the
@@ -7,6 +10,24 @@ import { homedir } from 'node:os';
 // The hub talks to these agents by typing into the PTY (bracketed paste + Enter).
 
 const SCROLLBACK_CAP = 512 * 1024; // bytes of raw PTY output kept for replay
+
+// Claude Code's status line shows the *requested* model; under cc-switch proxy
+// mode the client has none configured, so it displays its built-in default
+// while the proxy routes elsewhere. Read the current provider's model env from
+// cc-switch so the terminal shows the real backend model. Resolved per spawn,
+// so a provider switch applies on the next PTY restart.
+function ccSwitchModelEnv() {
+  try {
+    const dir = join(homedir(), '.cc-switch');
+    const { currentProviderClaude } = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8'));
+    if (!currentProviderClaude) return {};
+    const db = new DatabaseSync(join(dir, 'cc-switch.db'), { readOnly: true });
+    const row = db.prepare('SELECT settings_config FROM providers WHERE id = ?').get(currentProviderClaude);
+    db.close();
+    const env = JSON.parse(row?.settings_config || '{}').env || {};
+    return Object.fromEntries(Object.entries(env).filter(([k]) => /^ANTHROPIC_.*MODEL/.test(k)));
+  } catch { return {}; }
+}
 
 class TermSession {
   constructor(id, opts) {
@@ -27,7 +48,12 @@ class TermSession {
       cols: this.cols,
       rows: this.rows,
       cwd: this.opts.cwd || homedir(),
-      env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' },
+      env: {
+        ...process.env,
+        TERM: 'xterm-256color',
+        COLORTERM: 'truecolor',
+        ...(this.opts.cmd === 'claude' ? ccSwitchModelEnv() : {}),
+      },
     });
     this.pty.onData((d) => {
       this.push(d);

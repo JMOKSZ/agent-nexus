@@ -14,8 +14,6 @@
 <meta name="apple-mobile-web-app-title" content="NEXUS">
 </head>
 <body>
-<div id="bg-grid"></div>
-<div id="bg-scan"></div>
 
 <header id="topbar">
   <div class="brand">
@@ -25,9 +23,9 @@
   </div>
   <div class="top-status">
     <div class="led-group" id="top-leds"></div>
-    <button id="feed-btn" title="Toggle UPLINK / MEMORY sidebar">📡</button>
-    <button id="clear-btn" title="Clear all window displays (shared memory & event log are kept)">🧹</button>
-    <button id="settings-btn" title="Settings">⚙</button>
+    <button class="ibtn" id="feed-btn" title="Toggle UPLINK / MEMORY sidebar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a5.9 5.9 0 0 0 0 8.4"/><path d="M16.2 7.8a5.9 5.9 0 0 1 0 8.4"/><path d="M5 5a10.6 10.6 0 0 0 0 14"/><path d="M19 5a10.6 10.6 0 0 1 0 14"/></svg></button>
+    <button class="ibtn" id="clear-btn" title="Clear all window displays (shared memory & event log are kept)"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+    <button class="ibtn" id="settings-btn" title="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     <div class="conn" id="conn"><span class="conn-dot"></span><span id="conn-text">LINK</span></div>
     <div class="clock" id="clock">--:--:--</div>
   </div>
@@ -35,7 +33,7 @@
 
 <div id="settings-overlay" hidden>
   <div id="settings-panel">
-    <div class="set-head"><span>⚙ SETTINGS</span><button id="set-close">✕</button></div>
+    <div class="set-head"><span>⚙ SETTINGS</span><button class="ibtn" id="set-close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="set-body">
       <div class="set-section">
         <div class="set-title">AGENT MODELS & ARGS</div>
@@ -75,7 +73,7 @@
     <div id="mem-panel" hidden>
       <div class="mem-toolbar">
         <input id="mem-q" placeholder="Search memories (ranked by relevance)…" spellcheck="false">
-        <button id="mem-mgr-btn" title="Open memory manager (view/edit all memories)">MANAGE</button>
+        <button class="ibtn" id="mem-mgr-btn" title="Open memory manager (view/edit all memories)"><svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="7" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="17" y1="16" x2="22" y2="16"/></svg></button>
       </div>
       <div id="mem-list"></div>
       <div class="mem-add">
@@ -86,7 +84,7 @@
           <option value="task">task</option>
         </select>
         <input id="mem-text" placeholder="Write a new memory…" spellcheck="false">
-        <button id="mem-add-btn" title="Add to shared memory">＋</button>
+        <button class="ibtn ok" id="mem-add-btn" title="Add to shared memory"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
       </div>
     </div>
   </aside>
@@ -94,7 +92,7 @@
 
 <div id="memmgr-overlay" hidden>
   <div id="memmgr-panel">
-    <div class="set-head"><span>🧠 MEMORY MANAGER · All Shared Memories</span><button id="mm-close">✕</button></div>
+    <div class="set-head"><span>🧠 MEMORY MANAGER · All Shared Memories</span><button class="ibtn" id="mm-close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="mm-filter">
       <button class="mm-chip active" data-f="all">All</button>
       <button class="mm-chip" data-f="active">Active</button>
@@ -114,10 +112,10 @@
       <div id="pending-atts"></div>
       <textarea id="cmd-input" rows="1" placeholder="Broadcast to all agents; @name to target one; 📎 or drop attachments; Shift+Enter to send…"></textarea>
     </div>
-    <button id="attach-btn" title="Upload attachment (file/image/audio/video)">📎</button>
+    <button class="ibtn" id="attach-btn" title="Upload attachment (file/image/audio/video)"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></button>
     <input type="file" id="file-input" multiple hidden>
   </div>
-  <button id="send-btn">SEND ⇧⏎</button>
+  <button class="ibtn primary" id="send-btn" title="Send (Shift+Enter)"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
 </footer>
 
 <script src="vendor/xterm.js"></script>

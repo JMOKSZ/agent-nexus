@@ -35,7 +35,7 @@ function buildDeck(agents) {
         <span class="a-desc">${a.desc}</span>
         <span class="a-meta">
           <span class="a-latency" id="lat-${id}"></span>
-          <button class="a-stop" id="stop-${id}" data-agent="${id}" title="Stop current task and clear the queue">⏹</button>
+          <button class="a-stop" id="stop-${id}" data-agent="${id}" title="Stop current task and clear the queue"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
           ${a.stateless ? '' : `<button class="a-reset" data-agent="${id}" title="Reset this agent's session context and clear the window">RESET</button>`}
         </span>
       </div>
