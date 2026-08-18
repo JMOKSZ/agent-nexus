@@ -29,7 +29,7 @@ MEMO[task]: 进行中的任务状态或结论
 export class Hub {
   constructor(adapters, agentsList) {
     this.adapters = adapters;
-    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint }]));
+    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint, cwd: a.cwd }]));
     this.agentIds = agentsList.map((a) => a.id);
     const idAlt = this.agentIds.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') || 'a^';
     this.mentionRe = new RegExp(`^@(${idAlt}|all)\\b\\s*[:：,，]?\\s*([\\s\\S]+)$`, 'i');
@@ -161,6 +161,7 @@ export class Hub {
         text: prompt,
         session: this.sessions[agentId] || null,
         attachments,
+        workdir: this.agents[agentId].cwd,
         onSpawn: (child) => { this.procs[agentId] = child; },
         onDelta: (chunk) => {
           streamed = chunk;
@@ -296,6 +297,7 @@ export class Hub {
         const { text } = await adapter.run({
           text: DISTILL_PROMPT + evs.map((e) => e.line).join('\n'),
           attachments: [],
+          workdir: this.agents[did].cwd,
           onDelta: () => {},
           onSpawn: (c) => { this.procs[did] = c; },
         });

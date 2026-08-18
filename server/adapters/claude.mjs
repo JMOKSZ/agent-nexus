@@ -96,8 +96,9 @@ export const claudeAdapter = {
     },
   ],
 
-  async run({ text, session, attachments = [], onDelta, onSpawn = () => {} }) {
+  async run({ text, session, attachments = [], onDelta, onSpawn = () => {}, workdir }) {
     const s = asSession(session);
+    const base = workdir || WORKDIR;
     const cfg = getAgentCfg('claude');
     const args = ['-p', text + (attachments.length ? attachmentNote(attachments) : ''), '--output-format', 'stream-json', '--verbose'];
     if (cfg.model) args.push('--model', cfg.model);
@@ -112,14 +113,14 @@ export const claudeAdapter = {
     let usage = null;
     const { code, stderr } = await runCli('claude', args, {
       timeoutMs: 600_000,
-      cwd: s?.cwd || WORKDIR,
+      cwd: s?.cwd || base,
       onSpawn,
       onLine(line) {
         if (!line.trim().startsWith('{')) return;
         let ev;
         try { ev = JSON.parse(line); } catch { return; }
         if (ev.type === 'system' && ev.subtype === 'init' && ev.session_id) {
-          newSession = { id: ev.session_id, cwd: ev.cwd || s?.cwd || WORKDIR };
+          newSession = { id: ev.session_id, cwd: ev.cwd || s?.cwd || base };
         }
         if (ev.type === 'assistant' && ev.message?.content) {
           for (const block of ev.message.content) {
@@ -127,7 +128,7 @@ export const claudeAdapter = {
           }
         }
         if (ev.type === 'result') {
-          if (ev.session_id) newSession = { id: ev.session_id, cwd: s?.cwd || WORKDIR };
+          if (ev.session_id) newSession = { id: ev.session_id, cwd: s?.cwd || base };
           finalText = ev.result || '';
           usage = ev.total_cost_usd != null ? { costUsd: ev.total_cost_usd } : null;
         }

@@ -6,7 +6,8 @@
     "desc": "Claude Code CLI",
     "adapter": "claude",
     "modelHint": "claude-sonnet-4-6（留空=默认）",
-    "ctxChars": 900
+    "ctxChars": 900,
+    "cwd": "~"
   },
   {
     "id": "codex",

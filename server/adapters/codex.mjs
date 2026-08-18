@@ -1,7 +1,7 @@
 import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
-import { runCli, attachmentNote } from '../runner.mjs';
+import { runCli, attachmentNote, WORKDIR } from '../runner.mjs';
 import { getAgentCfg, splitArgs } from '../settings.mjs';
 
 // Codex: use the CLI bundled inside Codex.app (0.148) — the homebrew 0.136 CLI
@@ -97,7 +97,7 @@ export const codexAdapter = {
     },
   ],
 
-  async run({ text, session, attachments = [], onDelta, onSpawn = () => {} }) {
+  async run({ text, session, attachments = [], onDelta, onSpawn = () => {}, workdir }) {
     // session state: plain thread id, or {id, fork:true} after /fork
     const sid = typeof session === 'string' ? session : session?.id;
     const forking = typeof session === 'object' && session?.fork;
@@ -120,6 +120,7 @@ export const codexAdapter = {
     let usage = null;
     const { code, stderr } = await runCli(CODEX_BIN, args, {
       timeoutMs: 600_000,
+      cwd: workdir || WORKDIR,
       onSpawn,
       onLine(line) {
         if (!line.trim().startsWith('{')) return;

@@ -1,17 +1,25 @@
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Agent roster is user configuration, not code:
 //   ~/.agent-nexus/agents.json  (user's own setup, gitignored by location)
 //   <repo>/agents.example.json  (fallback + reference, committed)
-// Each entry: { id, name, color, desc, adapter, modelHint?, ctxChars? }
+// Each entry: { id, name, color, desc, adapter, modelHint?, ctxChars?, cwd? }
 // `adapter` must be a key of ADAPTER_TYPES in server/adapters/index.mjs;
 // multiple entries may share one adapter type (e.g. two claude instances).
+// `cwd` sets the working directory new sessions start in (default: the
+// shared nexus workdir); resumed sessions keep their own origin cwd.
 
 const USER_FILE = process.env.NEXUS_AGENTS_FILE || join(homedir(), '.agent-nexus', 'agents.json');
 const EXAMPLE_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'agents.example.json');
+
+function parseCwd(v) {
+  if (typeof v !== 'string' || !v.trim()) return undefined;
+  const p = resolve(v.trim().replace(/^~(?=$|\/)/, homedir()));
+  try { return statSync(p).isDirectory() ? p : undefined; } catch { return undefined; }
+}
 
 export function loadAgentsConfig() {
   const file = existsSync(USER_FILE) ? USER_FILE : EXAMPLE_FILE;
@@ -32,6 +40,7 @@ export function loadAgentsConfig() {
       adapter: String(a.adapter || id),
       modelHint: String(a.modelHint || ''),
       distiller: a.distiller === true,
+      cwd: parseCwd(a.cwd),
       ctxChars: Number.isFinite(Number(a.ctxChars)) ? Math.min(4000, Math.max(0, Math.round(Number(a.ctxChars)))) : undefined,
     });
   }
