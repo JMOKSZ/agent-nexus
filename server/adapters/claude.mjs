@@ -163,7 +163,14 @@ export const claudeAdapter = {
       const arg = args.trim();
       let pick;
       if (!arg) {
-        pick = all[0];
+        // Sessions written within the last 10 min are likely live elsewhere
+        // (e.g. an interactive claude) — never auto-pick one.
+        const LIVE_MS = 10 * 60 * 1000;
+        const idle = all.filter((s) => Date.now() - s.mtime > LIVE_MS);
+        if (!idle.length) {
+          return { text: `最近的 ${all.length} 个会话都在 10 分钟内有写入，大概率正在别处使用，不自动恢复。\n用 /sessions 查看，再 /resume <前缀> 显式选择（会以分叉方式接续，不影响原会话）。` };
+        }
+        pick = idle[0];
       } else {
         const matches = all.filter((s) => s.id.startsWith(arg));
         if (matches.length === 0) return { text: `没有匹配 "${arg}" 的会话。用 /sessions 查看列表。` };
@@ -175,9 +182,11 @@ export const claudeAdapter = {
         pick = matches[0];
       }
       if (!pick.cwd) return { text: `会话 ${pick.id.slice(0, 8)} 缺少 cwd 信息，无法恢复。` };
+      // Always fork: harness continues the context in a NEW session id, so the
+      // original transcript is never appended to (it may be live elsewhere).
       return {
-        session: { id: pick.id, cwd: pick.cwd },
-        text: `✓ 已恢复会话 ${pick.id.slice(0, 8)}（项目 ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)}）\n"${pick.snippet}"\n后续消息将接续该会话上下文。`,
+        session: { id: pick.id, cwd: pick.cwd, fork: true },
+        text: `✓ 已恢复会话 ${pick.id.slice(0, 8)}（项目 ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)}）\n"${pick.snippet}"\n后续消息将以分叉方式接续该会话上下文，原会话文件不会被修改。`,
       };
     }
     return null; // not handled → hub falls back
