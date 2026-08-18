@@ -6,6 +6,8 @@ NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, C
 
 ![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
 
+English | [中文](README.zh-CN.md)
+
 ![NEXUS Command Deck](assets/screenshot-deck.png)
 
 ## Features
