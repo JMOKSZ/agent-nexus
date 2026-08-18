@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind } from './memory.mjs';
 
 const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
 const MAX_HISTORY = 300;
 const MAX_DISPATCH_DEPTH = 4;
+const HUB_COMMANDS = new Set(['remember', 'forget', 'memories']);
 
 export const AGENTS = {
   claude: { name: 'CLAUDE', color: '#00f0ff', desc: 'Claude Code · cc-switch' },
@@ -63,6 +65,7 @@ export class Hub {
     this.messages.push(full);
     if (this.messages.length > MAX_HISTORY * 2) this.messages = this.messages.slice(-MAX_HISTORY);
     this.save();
+    logEvent(full);
     this.emit('msg', full);
     return full;
   }
@@ -106,8 +109,15 @@ export class Hub {
     this.emit('delta-start', { agent: agentId, deltaId, from });
     let streamed = '';
     try {
+      // Memory/context injection:
+      // - stateless agents (dsh): full block (memories + recent events)
+      // - sessioned agents: memories only — their session covers history,
+      //   but not what other agents/users wrote to shared memory
+      const prompt = adapter.stateless
+        ? buildContextBlock(agentId, { maxChars: 1800 }) + text
+        : buildContextBlock(agentId, { maxChars: 900, includeEvents: false }) + text;
       const result = await adapter.run({
-        text,
+        text: prompt,
         session: this.sessions[agentId] || null,
         attachments,
         onSpawn: (child) => { this.procs[agentId] = child; },
@@ -133,6 +143,7 @@ export class Hub {
         usage: result.usage || null,
       });
       if (depth < MAX_DISPATCH_DEPTH) this.scanDispatch(agentId, result.text || '', depth);
+      this.scanMemo(agentId, result.text || '');
     } catch (err) {
       this.emit('delta-end', { agent: agentId, deltaId });
       delete this.procs[agentId];
@@ -151,7 +162,8 @@ export class Hub {
   // Inter-agent dispatch: an agent reply may contain lines like
   //   @codex: review this function
   //   @openclaw 查一下今天的日程
-  // Each match forwards the task to that agent with attribution.
+  // Each match forwards the task to that agent with attribution, plus the
+  // originating agent's recent context so the target isn't working blind.
   scanDispatch(fromAgent, text, depth) {
     const seen = new Set();
     for (const line of text.split('\n')) {
@@ -161,9 +173,57 @@ export class Hub {
       const task = m[2].trim();
       if (target === fromAgent || !task || seen.has(target) || !this.adapters[target]) continue;
       seen.add(target);
-      const forwarded = `[from ${AGENTS[fromAgent].name}] ${task}`;
+      const context = buildContextBlock(fromAgent, { maxChars: 1200, eventLimit: 6 });
+      const forwarded = `${context}[from ${AGENTS[fromAgent].name}] ${task}`;
       this.pushMessage({ from: fromAgent, to: target, text: task, kind: 'dispatch', depth: depth + 1 });
       this.enqueue(target, forwarded, { from: fromAgent, depth: depth + 1 });
+    }
+  }
+
+  // Agents persist facts into shared memory with a standalone line:
+  //   MEMO: the deploy port is 7700
+  //   MEMO[decision]: use sqlite for storage
+  scanMemo(fromAgent, text) {
+    for (const line of text.split('\n')) {
+      const m = line.match(/^\s*MEMO(?:\[(\w+)\])?\s*[:：]\s*(.+)$/i);
+      if (!m) continue;
+      const id = addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: fromAgent });
+      if (id != null) {
+        this.pushMessage({ from: 'system', to: 'user', text: `🧠 共享记忆 #${id}（${AGENTS[fromAgent].name} · ${normalizeKind(m[1])}）: ${m[2].trim().slice(0, 120)}`, kind: 'memo' });
+      }
+    }
+  }
+
+  // Hub-global commands: shared memory is hub-level, so these work from any
+  // target including broadcast. Replies go to the feed, not one terminal.
+  handleHubCommand(cmdline) {
+    const sp = cmdline.indexOf(' ');
+    const cmd = (sp < 0 ? cmdline.slice(1) : cmdline.slice(1, sp)).toLowerCase();
+    const args = sp < 0 ? '' : cmdline.slice(sp + 1).trim();
+    const say = (text) => this.pushMessage({ from: 'system', to: 'user', text, kind: 'memo' });
+
+    if (cmd === 'remember') {
+      const km = args.match(/^(\w+)\s*[:：]\s*([\s\S]+)$/);
+      const kind = km ? normalizeKind(km[1]) : 'fact';
+      const text = km ? km[2].trim() : args;
+      if (!text) { say('用法: /remember [kind:] 内容 （kind = fact|decision|preference|task）'); return; }
+      const id = addMemory({ kind, text, trust: 'user', source: 'user' });
+      say(`🧠 已记住 #${id}（${kind}）: ${text.slice(0, 160)}`);
+      return;
+    }
+    if (cmd === 'forget') {
+      const id = Number(args);
+      if (!id) { say('用法: /forget <id>（id 见 /memories）'); return; }
+      say(retireMemory(id) ? `✓ 记忆 #${id} 已停用（可溯源，未物理删除）` : `记忆 #${id} 不存在或已停用`);
+      return;
+    }
+    if (cmd === 'memories') {
+      const n = Number(args) || 15;
+      const mems = listMemories(n);
+      if (!mems.length) { say('共享记忆为空。用 /remember 写入，或等 agent 用 MEMO: 行自行记录。'); return; }
+      const lines = mems.map((m) => `#${m.id} [${m.kind}${m.trust === 'user' ? ' · 你' : ` · ${m.source || 'agent'}`}] ${m.text}`);
+      say(`共享记忆（最新 ${mems.length} 条）:\n${lines.join('\n')}`);
+      return;
     }
   }
 
@@ -179,6 +239,11 @@ export class Hub {
     if (!text) text = '(见附件)';
     this.pushMessage({ from: 'user', to, text, kind: 'user', attachments: attachments.length ? attachments : undefined });
     if (text.startsWith('/')) {
+      const cmdName = text.slice(1).split(/\s/, 1)[0].toLowerCase();
+      if (HUB_COMMANDS.has(cmdName)) {
+        this.handleHubCommand(text);
+        return;
+      }
       if (to === 'broadcast') {
         this.pushMessage({ from: 'system', to: 'user', text: '斜杠命令需要定向到具体 agent，例如 @claude /sessions', kind: 'error' });
         return;

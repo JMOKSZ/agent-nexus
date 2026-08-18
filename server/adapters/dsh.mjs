@@ -6,6 +6,7 @@ import { getAgentCfg, splitArgs } from '../settings.mjs';
 // Does NOT touch the separate `dsh --profile lark` process (Feishu link stays intact).
 export const dshAdapter = {
   id: 'dsh',
+  stateless: true, // no session continuity — hub prepends shared context each run
   slashCommands: ['status'],
   async run({ text, attachments = [], onDelta, onSpawn = () => {} }) {
     const prompt = text + (attachments.length ? attachmentNote(attachments) : '');
