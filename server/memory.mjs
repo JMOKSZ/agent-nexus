@@ -88,6 +88,35 @@ export function approveMemory(id) {
   return r.changes > 0;
 }
 
+export function restoreMemory(id) {
+  const r = getDb().prepare("UPDATE memories SET status = 'active' WHERE id = ? AND status = 'retired'").run(Number(id));
+  return r.changes > 0;
+}
+
+export function updateMemory(id, { text, kind }) {
+  const sets = [];
+  const vals = [];
+  if (text !== undefined) {
+    const clean = String(text || '').trim().slice(0, 500);
+    if (!clean) return false;
+    sets.push('text = ?');
+    vals.push(clean);
+  }
+  if (kind !== undefined) {
+    sets.push('kind = ?');
+    vals.push(normalizeKind(kind));
+  }
+  if (!sets.length) return false;
+  vals.push(Number(id));
+  return getDb().prepare(`UPDATE memories SET ${sets.join(', ')} WHERE id = ?`).run(...vals).changes > 0;
+}
+
+export function listAllMemories(limit = 300) {
+  return getDb().prepare(
+    "SELECT id, ts, kind, text, trust, source, status FROM memories ORDER BY id DESC LIMIT ?",
+  ).all(Number(limit) || 300);
+}
+
 export function listStaged() {
   return getDb().prepare(
     "SELECT id, ts, kind, text, trust, source FROM memories WHERE status = 'staged' ORDER BY id ASC",

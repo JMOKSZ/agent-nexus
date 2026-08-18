@@ -67,6 +67,7 @@
     <div id="mem-panel" hidden>
       <div class="mem-toolbar">
         <input id="mem-q" placeholder="搜索记忆（相关度排序）…" spellcheck="false">
+        <button id="mem-mgr-btn" title="打开记忆管理页（查看/编辑全部记忆）">管理</button>
       </div>
       <div id="mem-list"></div>
       <div class="mem-add">
@@ -82,6 +83,20 @@
     </div>
   </aside>
 </main>
+
+<div id="memmgr-overlay" hidden>
+  <div id="memmgr-panel">
+    <div class="set-head"><span>🧠 MEMORY MANAGER · 全部共享记忆</span><button id="mm-close">✕</button></div>
+    <div class="mm-filter">
+      <button class="mm-chip active" data-f="all">全部</button>
+      <button class="mm-chip" data-f="active">生效中</button>
+      <button class="mm-chip" data-f="staged">待审批</button>
+      <button class="mm-chip" data-f="retired">已停用</button>
+      <span class="mm-count" id="mm-count"></span>
+    </div>
+    <div id="mm-list"></div>
+  </div>
+</div>
 
 <footer id="cmdbar">
   <div class="chips" id="chips"></div>

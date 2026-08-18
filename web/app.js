@@ -533,9 +533,62 @@ setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('zh-
 
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
-  if (!$('#settings-overlay').hidden) closeSettings(true);
+  if (!$('#memmgr-overlay').hidden) $('#memmgr-overlay').hidden = true;
+  else if (!$('#settings-overlay').hidden) closeSettings(true);
   else if (state.target !== 'broadcast') setTarget('broadcast');
 });
+
+/* ── memory manager overlay ── */
+let mmFilter = 'all';
+async function loadMemMgr() {
+  const res = await fetch('/api/memories/all');
+  const { memories } = await res.json();
+  const shown = mmFilter === 'all' ? memories : memories.filter((m) => m.status === mmFilter);
+  $('#mm-count').textContent = `${shown.length} / ${memories.length} 条`;
+  const list = $('#mm-list');
+  if (!shown.length) { list.innerHTML = '<div class="mm-empty">该分类下没有记忆</div>'; return; }
+  list.innerHTML = shown.map((m) => `
+    <div class="mm-item ${m.status}" data-id="${m.id}">
+      <div class="mm-head">
+        <span class="mm-id">#${m.id}</span>
+        <span class="mm-status ${m.status}">${m.status}</span>
+        <span>${m.trust === 'user' ? '你' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
+        <select class="mm-kind-sel">
+          ${['fact', 'decision', 'preference', 'task'].map((k) => `<option value="${k}"${k === m.kind ? ' selected' : ''}>${k}</option>`).join('')}
+        </select>
+      </div>
+      <textarea class="mm-text" rows="2" spellcheck="false">${esc(m.text)}</textarea>
+      <div class="mm-actions">
+        <button class="mm-btn save" data-act="save">保存修改</button>
+        ${m.status === 'staged' ? '<button class="mm-btn" data-act="approve">✓ 批准</button>' : ''}
+        ${m.status === 'retired' ? '<button class="mm-btn" data-act="restore">♻ 恢复</button>' : ''}
+        ${m.status !== 'retired' ? '<button class="mm-btn danger" data-act="retire">✕ 停用</button>' : ''}
+      </div>
+    </div>`).join('');
+  list.querySelectorAll('.mm-item').forEach((item) => {
+    const id = Number(item.dataset.id);
+    item.querySelectorAll('.mm-btn').forEach((btn) =>
+      btn.addEventListener('click', async () => {
+        const act = btn.dataset.act;
+        const url = { save: '/api/memories/update', approve: '/api/memories/approve', restore: '/api/memories/restore', retire: '/api/memories/retire' }[act];
+        const body = act === 'save'
+          ? { id, text: item.querySelector('.mm-text').value, kind: item.querySelector('.mm-kind-sel').value }
+          : { id };
+        await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        loadMemMgr();
+        loadMemories();
+      }));
+  });
+}
+$('#mem-mgr-btn').addEventListener('click', () => { $('#memmgr-overlay').hidden = false; loadMemMgr(); });
+$('#mm-close').addEventListener('click', () => { $('#memmgr-overlay').hidden = true; });
+$('#memmgr-overlay').addEventListener('click', (e) => { if (e.target.id === 'memmgr-overlay') $('#memmgr-overlay').hidden = true; });
+document.querySelectorAll('.mm-chip').forEach((c) =>
+  c.addEventListener('click', () => {
+    mmFilter = c.dataset.f;
+    document.querySelectorAll('.mm-chip').forEach((x) => x.classList.toggle('active', x === c));
+    loadMemMgr();
+  }));
 
 loadSettings();
 loadMemories();
