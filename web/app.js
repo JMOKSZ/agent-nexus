@@ -172,7 +172,7 @@ function applyFocus() {
 /* ── settings / skins ── */
 const THEME_SW = {
   cyber: '#9be7d8',
-  light: '#7ccfc0',
+  light: '#5b84d6',
   dark: '#b8a9e8',
 };
 const THEME_LABEL = { cyber: 'CYBER', light: 'LIGHT', dark: 'DARK' };

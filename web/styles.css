@@ -20,7 +20,7 @@ body[data-theme="light"] {
   --bg: #faf4ef; --panel: #ffffff; --panel-2: #fdf8f3;
   --panel-rgb: 255, 255, 255; --panel2-rgb: 253, 248, 243;
   --line: #eadfd4; --text: #6b5f73; --dim: #b0a3b6;
-  --brand: #7ccfc0; --user: #f0b27a; --danger: #ec8ba0; --ok: #8fd0a0;
+  --brand: #5b84d6; --user: #f0b27a; --danger: #ec8ba0; --ok: #6cb38a;
 }
 body[data-theme="dark"] {
   --bg: #131420; --panel: #1b1d2c; --panel-2: #202233;
