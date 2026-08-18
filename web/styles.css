@@ -364,7 +364,9 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 }
 
 /* ── focus mode (single-agent full-window popup) ── */
-#quad.focus .term:not(.focused) { visibility: hidden; }
+/* siblings stay visible but dimmed so the focused window's translucency
+   (Ghostty-style --focus-op) has something real to show through */
+#quad.focus .term:not(.focused) { opacity: .3; filter: saturate(.5); pointer-events: none; }
 .term.focused {
   position: fixed; z-index: 30;
   top: 56px; left: 14px; right: 14px; bottom: 76px;
