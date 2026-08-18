@@ -4,7 +4,8 @@
   "description": "NEXUS Command Deck — unified cyberpunk WebUI for driving multiple local CLI agents (Claude Code, Codex, DSH, OpenClaw)",
   "type": "module",
   "scripts": {
-    "start": "node server/index.mjs"
+    "start": "node server/index.mjs",
+    "setup": "node bin/install.mjs"
   },
   "license": "MIT",
   "dependencies": {

@@ -2,7 +2,7 @@
 
 本机多 Agent 统一指挥台：在一个赛博风 WebUI 里同时指挥任意数量、任意组合的本地 CLI agent（内置 Claude Code、Codex、DeepSeek Harness、OpenClaw 四种适配器，可自行增删），支持广播/定向指令、agent 间互相调度、共享记忆、会话续接、附件上传、停止/重置、多套皮肤与聚焦模式。
 
-![tech](https://img.shields.io/badge/stack-zero--dependency%20Node%20ESM-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888)
+![tech](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888)
 
 ## 功能
 
@@ -12,13 +12,14 @@
 - **共享记忆**：`node:sqlite` 事件溯源存储；`/remember` `/forget` `/memories` 命令；agent 回复中的 `MEMO[kind]: …` 行自动入库；按相关度召回注入各 agent prompt；`/distill` 蒸馏候选记忆 + MEMORY 面板待审批流；「管理」页可查看/编辑/恢复全部记忆
 - **会话管理**：`/sessions` 列出历史会话、`/resume <前缀>` 恢复上下文（claude/codex）、`/clear` 清空、`/status` 查看各 agent 链路状态、`/stop` 停止当前任务并清空队列
 - **附件**：📎 按钮 / 拖拽 / 粘贴上传文件、图片、音频、视频（≤50MB）；codex 图片走真视觉输入，其余以路径引用传给 agent
-- **设置面板（⚙）**：每个 agent 的模型与附加 CLI 参数、5 套皮肤（CYBERPUNK / MATRIX / SYNTHWAVE / AMBER / ARCTIC）、聚焦窗口透明度（默认 70%，Ghostty 式背景半透明文字不透明）
+- **设置面板（⚙）**：每个 agent 的模型与附加 CLI 参数、3 套马卡龙皮肤（CYBER / LIGHT / DARK）、聚焦窗口透明度（默认 70%，Ghostty 式背景半透明文字不透明）
 - **聚焦模式**：单选一个 agent，其终端弹出为全窗口半透明面板；再点一次 / Esc / 选 ALL 退出
 
 ## 要求
 
 - **macOS**（launchd 常驻用；不用 launchd 也可以直接 `node` 前台跑，其他 Unix 同理）
-- **Node.js ≥ 18**（用到 `fetch` / `structuredClone`；零 npm 依赖，无需 `npm install`）
+- **Node.js ≥ 22.5**（共享记忆用 `node:sqlite`，推荐 ≥ 23.4；安装程序会自动检测）
+- **npm install 一次**（node-pty 真终端、ws、xterm；node-pty 编译需要 Xcode Command Line Tools）
 - 按需安装各 agent 的 CLI（缺哪个只是对应终端不可用，不影响其他）：
 
 | Agent | CLI | 说明 |
@@ -35,14 +36,40 @@ git clone https://github.com/<your-name>/agent-nexus.git
 cd agent-nexus
 ```
 
-### 方式一：直接运行（最简单）
+### 安装程序（推荐）
 
 ```bash
+node bin/install.mjs        # 或 npm run setup
+```
+
+交互式向导会一次完成：
+
+1. **环境检查** — Node 版本与 `node:sqlite` 支持
+2. **依赖安装** — `npm install`（node-pty / ws / xterm）
+3. **组建你的 agent 团队** — 自动探测本机已安装的 CLI（claude / codex / dsh / openclaw），逐个确认是否纳入阵容，也可以追加同类型的第二个实例（如 `claude2`），自动生成 `~/.agent-nexus/agents.json`
+4. **常驻服务** — macOS 上一键安装 launchd 服务（自动适配本机 node 与仓库路径，开机自启、崩溃拉起）
+5. **健康检查** — 启动后自动验证 deck 已上线
+
+非交互/脚本化用法：
+
+```bash
+node bin/install.mjs --yes                 # 全部接受默认值
+node bin/install.mjs --no-launchd          # 不装后台服务
+node bin/install.mjs --skip-deps           # 跳过 npm install
+printf 'y\nn\ny\n' | node bin/install.mjs  # 管道输入也支持
+```
+
+### 手动：直接运行
+
+```bash
+npm install
 node server/index.mjs
 # 打开 http://127.0.0.1:7700
 ```
 
-### 方式二：launchd 常驻（macOS 推荐）
+不写 `~/.agent-nexus/agents.json` 时会使用仓库里的 `agents.example.json` 作为阵容。
+
+### 手动：launchd 常驻（macOS）
 
 ```bash
 # 1. 生成适配本机路径的 plist（模板里是 __HOME__ 占位符）
@@ -130,6 +157,7 @@ server/
   adapters/            # claude / codex / dsh / openclaw 适配器 + 类型注册表
 web/                   # 无构建 vanilla JS + 手写 CSS
 agents.example.json    # agent 阵容示例配置（4 个内置适配器各一个）
-bin/nexus              # launchd 控制脚本
+bin/install.mjs        # 交互式安装程序（环境检查/组队/launchd/健康检查）
+bin/nexus              # launchd 控制 + agent 互调 CLI
 launchd/               # plist 模板
 ```
