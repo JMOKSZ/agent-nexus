@@ -62,7 +62,7 @@ body {
 
 /* ── topbar ── */
 #topbar {
-  z-index: 2;
+  z-index: 46; /* above the feed drawer (45) so its toggle stays tappable; below overlays (50) */
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 18px;
   border-bottom: 1px solid var(--line);
