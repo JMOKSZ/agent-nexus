@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Hub } from './hub.mjs';
 import { UPLOAD_DIR } from './runner.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
-import { listMemories, recallMemories, addMemory, retireMemory, normalizeKind } from './memory.mjs';
+import { listMemories, recallMemories, addMemory, retireMemory, approveMemory, listStaged, normalizeKind } from './memory.mjs';
 import { claudeAdapter } from './adapters/claude.mjs';
 import { codexAdapter } from './adapters/codex.mjs';
 import { dshAdapter } from './adapters/dsh.mjs';
@@ -89,7 +89,10 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/memories' && req.method === 'GET') {
     const q = url.searchParams.get('q') || '';
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ memories: q ? recallMemories(q, 30) : listMemories(50) }));
+    res.end(JSON.stringify({
+      memories: q ? recallMemories(q, 30) : listMemories(50),
+      staged: listStaged(),
+    }));
     return;
   }
 
@@ -113,6 +116,16 @@ const server = createServer(async (req, res) => {
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
     const ok = retireMemory(body.id);
     if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `记忆 #${body.id} 已停用`, kind: 'memo' });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
+    return;
+  }
+
+  if (url.pathname === '/api/memories/approve' && req.method === 'POST') {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
+    const ok = approveMemory(body.id);
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `✓ 记忆 #${body.id} 已批准生效`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok }));
     return;

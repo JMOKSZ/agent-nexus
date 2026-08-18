@@ -212,6 +212,11 @@ body {
 .mem-item .m-src { opacity: .7; }
 .mem-item .m-x { margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-family: var(--mono); font-size: 11px; padding: 0 2px; }
 .mem-item .m-x:hover { color: var(--danger); }
+.mem-item.staged { border-left-color: #ffb84f; background: rgba(255,184,79,.05); }
+.mem-item .m-ok { margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-family: var(--mono); font-size: 11px; padding: 0 2px; }
+.mem-item .m-ok:hover { color: var(--dsh); }
+.mem-item.staged .m-ok + .m-x { margin-left: 0; }
+.mem-sec { font-size: 9.5px; letter-spacing: 1.5px; color: #ffb84f; opacity: .9; padding: 2px 4px 0; text-transform: uppercase; }
 .mem-empty { margin: auto; color: var(--dim); font-size: 10.5px; opacity: .6; text-align: center; padding: 20px 10px; }
 .mem-add { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
 .mem-add select {

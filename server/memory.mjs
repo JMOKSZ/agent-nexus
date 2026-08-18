@@ -39,8 +39,21 @@ function getDb() {
       status TEXT NOT NULL DEFAULT 'active'
     );
     CREATE INDEX IF NOT EXISTS idx_memories_status ON memories(status, ts);
+    CREATE TABLE IF NOT EXISTS meta (
+      k TEXT PRIMARY KEY,
+      v TEXT
+    );
   `);
   return db;
+}
+
+export function getMeta(k) {
+  return getDb().prepare('SELECT v FROM meta WHERE k = ?').get(k)?.v ?? null;
+}
+
+export function setMeta(k, v) {
+  getDb().prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v')
+    .run(k, String(v));
 }
 
 export function logEvent({ from, to, kind, text }) {
@@ -56,17 +69,48 @@ export function normalizeKind(k) {
   return MEMORY_KINDS.has(v) ? v : 'fact';
 }
 
-export function addMemory({ kind = 'fact', text, trust = 'agent', source = null }) {
+export function addMemory({ kind = 'fact', text, trust = 'agent', source = null, status = 'active' }) {
   const clean = String(text || '').trim().slice(0, 500);
   if (!clean) return null;
-  const r = getDb().prepare('INSERT INTO memories (ts, kind, text, trust, source) VALUES (?, ?, ?, ?, ?)')
-    .run(Date.now(), normalizeKind(kind), clean, trust === 'user' ? 'user' : 'agent', source);
+  const r = getDb().prepare('INSERT INTO memories (ts, kind, text, trust, source, status) VALUES (?, ?, ?, ?, ?, ?)')
+    .run(Date.now(), normalizeKind(kind), clean, trust === 'user' ? 'user' : 'agent', source,
+      status === 'staged' ? 'staged' : 'active');
   return Number(r.lastInsertRowid);
 }
 
 export function retireMemory(id) {
-  const r = getDb().prepare("UPDATE memories SET status = 'retired' WHERE id = ? AND status = 'active'").run(Number(id));
+  const r = getDb().prepare("UPDATE memories SET status = 'retired' WHERE id = ? AND status != 'retired'").run(Number(id));
   return r.changes > 0;
+}
+
+export function approveMemory(id) {
+  const r = getDb().prepare("UPDATE memories SET status = 'active' WHERE id = ? AND status = 'staged'").run(Number(id));
+  return r.changes > 0;
+}
+
+export function listStaged() {
+  return getDb().prepare(
+    "SELECT id, ts, kind, text, trust, source FROM memories WHERE status = 'staged' ORDER BY id ASC",
+  ).all();
+}
+
+// Events after the given id (distillation watermark), excluding memo notices
+// to keep distill output from feeding back into the next distill run.
+export function eventsSince(afterId = 0, { limit = 120, maxChars = 12000 } = {}) {
+  const rows = getDb().prepare(`
+    SELECT id, ts, from_id, to_id, kind, text FROM events
+    WHERE id > ? AND kind != 'memo'
+    ORDER BY id ASC LIMIT ?
+  `).all(Number(afterId) || 0, limit);
+  const out = [];
+  let chars = 0;
+  for (const r of rows) {
+    const line = `${hhmm(r.ts)} ${r.from_id}→${r.to_id || '?'}: ${clip(r.text, 300)}`;
+    if (chars + line.length > maxChars) break;
+    out.push({ id: r.id, line });
+    chars += line.length;
+  }
+  return out;
 }
 
 export function listMemories(limit = 15) {

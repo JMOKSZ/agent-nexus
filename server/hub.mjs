@@ -2,14 +2,29 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind } from './memory.mjs';
+import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind, eventsSince, getMeta, setMeta } from './memory.mjs';
 import { getAgentCfg } from './settings.mjs';
 
 const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
 const MAX_HISTORY = 300;
 const MAX_DISPATCH_DEPTH = 4;
-const HUB_COMMANDS = new Set(['remember', 'forget', 'memories']);
+const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill']);
+
+const DISTILL_PROMPT = `你是 NEXUS 多 agent 系统的记忆蒸馏器。下面是系统近期的事件日志（用户与 claude/codex/dsh/openclaw 四个 agent 的交互记录）。
+请提炼出值得长期记住的信息，每条一行，严格使用以下格式（除此以外不要输出任何内容）：
+MEMO[fact]: 客观事实（端口、路径、配置、凭据位置等）
+MEMO[decision]: 技术/方案决策及其原因
+MEMO[preference]: 用户偏好、习惯
+MEMO[task]: 进行中的任务状态或结论
+规则：
+- 只提炼有长期价值的信息；寒暄、一次性问答、报错过程不要
+- 每条 ≤120 字，自包含（脱离日志上下文也能读懂）
+- 互相重复的内容合并成一条
+- 最多 10 条
+- 如果日志里没有值得提炼的内容，只输出一行：NONE
+
+事件日志：`;
 
 export const AGENTS = {
   claude: { name: 'CLAUDE', color: '#00f0ff', desc: 'Claude Code · cc-switch' },
@@ -229,6 +244,53 @@ export class Hub {
       say(`共享记忆（最新 ${mems.length} 条）:\n${lines.join('\n')}`);
       return;
     }
+    if (cmd === 'distill') {
+      this.runDistill();
+      return;
+    }
+  }
+
+  // Distillation job: dsh (cheap, stateless) compresses new events since the
+  // last watermark into candidate memories, which land in the staged area
+  // awaiting user approval in the MEMORY panel.
+  async runDistill() {
+    const adapter = this.adapters.dsh;
+    const say = (text) => this.pushMessage({ from: 'system', to: 'user', text, kind: 'memo' });
+    if (!adapter) { say('蒸馏器不可用（缺少 dsh adapter）。'); return; }
+    const watermark = Number(getMeta('last_distill_event_id') || 0);
+    const evs = eventsSince(watermark);
+    if (!evs.length) { say('没有新事件需要蒸馏。'); return; }
+    const prev = this.queues.dsh || Promise.resolve();
+    const job = prev.then(async () => {
+      this.setStatus('dsh', { state: 'running', task: '🧪 蒸馏共享记忆…' });
+      try {
+        const { text } = await adapter.run({
+          text: DISTILL_PROMPT + evs.map((e) => e.line).join('\n'),
+          attachments: [],
+          onDelta: () => {},
+          onSpawn: (c) => { this.procs.dsh = c; },
+        });
+        delete this.procs.dsh;
+        let count = 0;
+        for (const line of (text || '').split('\n')) {
+          const m = line.match(/^\s*MEMO(?:\[(\w+)\])?\s*[:：]\s*(.+)$/i);
+          if (!m) continue;
+          if (addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: 'distill:dsh', status: 'staged' }) != null) count++;
+        }
+        setMeta('last_distill_event_id', evs[evs.length - 1].id);
+        this.setStatus('dsh', { state: 'idle', task: null });
+        say(count
+          ? `🧪 蒸馏完成：${count} 条候选记忆进入待审批区（MEMORY 面板里 ✓ 批准 / ✕ 停用）`
+          : '🧪 蒸馏完成：这段日志没有提炼出新的长期记忆。');
+      } catch (err) {
+        delete this.procs.dsh;
+        this.setStatus('dsh', { state: 'idle', task: null });
+        say(`⚠ 蒸馏失败: ${err.message || err}`);
+      }
+    });
+    this.queues.dsh = job.catch(() => {});
+    say(`🧪 蒸馏作业已排队：${evs.length} 条新事件，由 DEEPSEEK 提炼…`);
+    return job;
   }
 
   handleUserInput(raw, attachments = []) {

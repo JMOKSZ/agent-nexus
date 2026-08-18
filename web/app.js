@@ -292,25 +292,42 @@ $('#tab-mem').addEventListener('click', () => setMemTab('mem'));
 
 async function loadMemories(q = $('#mem-q').value.trim()) {
   const res = await fetch('/api/memories' + (q ? `?q=${encodeURIComponent(q)}` : ''));
-  const { memories } = await res.json();
-  if (!q) $('#mem-count').textContent = memories.length ? ` ${memories.length}` : '';
+  const { memories, staged = [] } = await res.json();
+  if (!q) $('#mem-count').textContent = memories.length
+    ? ` ${memories.length}${staged.length ? ` +${staged.length}` : ''}`
+    : (staged.length ? ` +${staged.length}` : '');
   const list = $('#mem-list');
-  if (!memories.length) {
-    list.innerHTML = `<div class="mem-empty">${q ? '没有匹配的记忆' : '共享记忆为空<br>用 /remember 或下方输入框写入'}</div>`;
-    return;
-  }
-  list.innerHTML = memories.map((m) => `
-    <div class="mem-item">
+  const memItem = (m, stagedMode) => `
+    <div class="mem-item${stagedMode ? ' staged' : ''}">
       <div class="m-head">
-        <span class="m-kind">#${m.id} ${esc(m.kind)}</span>
+        <span class="m-kind">${stagedMode ? '🧪 ' : ''}#${m.id} ${esc(m.kind)}</span>
         <span class="m-src">${m.trust === 'user' ? '你' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
+        ${stagedMode ? `<button class="m-ok" data-id="${m.id}" title="批准生效">✓</button>` : ''}
         <button class="m-x" data-id="${m.id}" title="停用（可溯源，不物理删除）">✕</button>
       </div>
       ${esc(m.text)}
-    </div>`).join('');
+    </div>`;
+  let html = '';
+  if (staged.length && !q) {
+    html += `<div class="mem-sec">待审批（蒸馏产物）</div>` + staged.map((m) => memItem(m, true)).join('');
+  }
+  if (memories.length) html += memories.map((m) => memItem(m, false)).join('');
+  if (!html) {
+    list.innerHTML = `<div class="mem-empty">${q ? '没有匹配的记忆' : '共享记忆为空<br>用 /remember 或下方输入框写入'}</div>`;
+    return;
+  }
+  list.innerHTML = html;
   list.querySelectorAll('.m-x').forEach((b) =>
     b.addEventListener('click', async () => {
       await fetch('/api/memories/retire', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: Number(b.dataset.id) }),
+      });
+      loadMemories();
+    }));
+  list.querySelectorAll('.m-ok').forEach((b) =>
+    b.addEventListener('click', async () => {
+      await fetch('/api/memories/approve', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: Number(b.dataset.id) }),
       });
