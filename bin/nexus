@@ -1,0 +1,9 @@
+#!/bin/sh
+# Manual control for agent-nexus (launchd-backed)
+case "$1" in
+  start)   launchctl load ~/Library/LaunchAgents/com.agent-nexus.plist 2>/dev/null; echo "nexus → http://127.0.0.1:7700" ;;
+  stop)    launchctl unload ~/Library/LaunchAgents/com.agent-nexus.plist; echo stopped ;;
+  restart) launchctl kickstart -k gui/$(id -u)/com.agent-nexus && echo restarted ;;
+  logs)    tail -f ~/.agent-nexus/nexus.log ;;
+  *)       echo "usage: nexus {start|stop|restart|logs}" ;;
+esac

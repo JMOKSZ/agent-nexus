@@ -1,0 +1,10 @@
+{
+  "name": "agent-nexus",
+  "version": "1.0.0",
+  "description": "NEXUS Command Deck — unified cyberpunk WebUI for driving multiple local CLI agents (Claude Code, Codex, DSH, OpenClaw)",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.mjs"
+  },
+  "license": "MIT"
+}

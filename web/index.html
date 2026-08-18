@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS // Command Deck</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>⬡</text></svg>">
+</head>
+<body>
+<div id="bg-grid"></div>
+<div id="bg-scan"></div>
+
+<header id="topbar">
+  <div class="brand">
+    <span class="brand-hex">⬡</span>
+    <span class="brand-name">NEXUS</span>
+    <span class="brand-sub">// COMMAND DECK</span>
+  </div>
+  <div class="top-status">
+    <div class="led-group" id="top-leds"></div>
+    <button id="settings-btn" title="设置">⚙</button>
+    <div class="conn" id="conn"><span class="conn-dot"></span><span id="conn-text">LINK</span></div>
+    <div class="clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div id="settings-overlay" hidden>
+  <div id="settings-panel">
+    <div class="set-head"><span>⚙ SETTINGS</span><button id="set-close">✕</button></div>
+    <div class="set-body">
+      <div class="set-section">
+        <div class="set-title">AGENT 模型与参数</div>
+        <div class="set-hint">模型留空 = 用 agent 自己的默认；附加参数原样追加到 CLI 命令行</div>
+        <div id="set-agents"></div>
+      </div>
+      <div class="set-section">
+        <div class="set-title">SKIN · 皮肤</div>
+        <div id="set-themes"></div>
+      </div>
+      <div class="set-section">
+        <div class="set-title">聚焦窗口透明度 <span id="op-val">70%</span></div>
+        <input type="range" id="set-opacity" min="30" max="100" step="5" value="70">
+        <div class="set-hint">单选某个 agent 时弹出的全窗口面板背景透明度（Ghostty 式：背景半透明、文字不透明）</div>
+      </div>
+    </div>
+    <div class="set-foot">
+      <span id="set-status"></span>
+      <button id="set-save">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<main id="deck">
+  <section id="quad">
+    <!-- agent terminals injected here -->
+  </section>
+  <aside id="feed-panel">
+    <div class="feed-head">
+      <span>UPLINK FEED</span>
+      <span class="feed-count" id="feed-count">0</span>
+    </div>
+    <div id="feed"></div>
+  </aside>
+</main>
+
+<footer id="cmdbar">
+  <div class="chips" id="chips"></div>
+  <div class="input-wrap" id="drop-zone">
+    <span class="prompt-sig" id="prompt-sig">⬡</span>
+    <div class="input-col">
+      <div id="pending-atts"></div>
+      <textarea id="cmd-input" rows="1" placeholder="广播到全部 agent；@claude/@codex/@dsh/@openclaw 定向；📎 或拖拽添加附件；Shift+Enter 发送…"></textarea>
+    </div>
+    <button id="attach-btn" title="上传附件（文件/图片/音频/视频）">📎</button>
+    <input type="file" id="file-input" multiple hidden>
+  </div>
+  <button id="send-btn">SEND ⇧⏎</button>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
