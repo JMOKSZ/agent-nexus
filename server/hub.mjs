@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind } from './memory.mjs';
+import { getAgentCfg } from './settings.mjs';
 
 const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
@@ -109,13 +110,16 @@ export class Hub {
     this.emit('delta-start', { agent: agentId, deltaId, from });
     let streamed = '';
     try {
-      // Memory/context injection:
+      // Memory/context injection (budget per agent, 0 disables):
       // - stateless agents (dsh): full block (memories + recent events)
       // - sessioned agents: memories only — their session covers history,
       //   but not what other agents/users wrote to shared memory
-      const prompt = adapter.stateless
-        ? buildContextBlock(agentId, { maxChars: 1800 }) + text
-        : buildContextBlock(agentId, { maxChars: 900, includeEvents: false }) + text;
+      const budget = getAgentCfg(agentId).ctxChars ?? (adapter.stateless ? 1800 : 900);
+      const prompt = budget > 0
+        ? (adapter.stateless
+          ? buildContextBlock(agentId, { maxChars: budget, query: text })
+          : buildContextBlock(agentId, { maxChars: budget, includeEvents: false, query: text })) + text
+        : text;
       const result = await adapter.run({
         text: prompt,
         session: this.sessions[agentId] || null,
@@ -173,7 +177,7 @@ export class Hub {
       const task = m[2].trim();
       if (target === fromAgent || !task || seen.has(target) || !this.adapters[target]) continue;
       seen.add(target);
-      const context = buildContextBlock(fromAgent, { maxChars: 1200, eventLimit: 6 });
+      const context = buildContextBlock(fromAgent, { maxChars: 1200, eventLimit: 6, query: task });
       const forwarded = `${context}[from ${AGENTS[fromAgent].name}] ${task}`;
       this.pushMessage({ from: fromAgent, to: target, text: task, kind: 'dispatch', depth: depth + 1 });
       this.enqueue(target, forwarded, { from: fromAgent, depth: depth + 1 });

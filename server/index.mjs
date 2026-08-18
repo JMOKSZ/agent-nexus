@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { Hub } from './hub.mjs';
 import { UPLOAD_DIR } from './runner.mjs';
 import { loadSettings, saveSettings } from './settings.mjs';
+import { listMemories, recallMemories, addMemory, retireMemory, normalizeKind } from './memory.mjs';
 import { claudeAdapter } from './adapters/claude.mjs';
 import { codexAdapter } from './adapters/codex.mjs';
 import { dshAdapter } from './adapters/dsh.mjs';
@@ -82,6 +83,38 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/settings' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(loadSettings()));
+    return;
+  }
+
+  if (url.pathname === '/api/memories' && req.method === 'GET') {
+    const q = url.searchParams.get('q') || '';
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ memories: q ? recallMemories(q, 30) : listMemories(50) }));
+    return;
+  }
+
+  if (url.pathname === '/api/memories' && req.method === 'POST') {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
+    const id = addMemory({ kind: normalizeKind(body.kind), text: body.text, trust: 'user', source: 'user' });
+    if (id == null) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end('{"error":"empty text"}');
+      return;
+    }
+    hub.pushMessage({ from: 'system', to: 'user', text: `🧠 已记住 #${id}（${normalizeKind(body.kind)}）: ${String(body.text).slice(0, 120)}`, kind: 'memo' });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ id }));
+    return;
+  }
+
+  if (url.pathname === '/api/memories/retire' && req.method === 'POST') {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
+    const ok = retireMemory(body.id);
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `记忆 #${body.id} 已停用`, kind: 'memo' });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok }));
     return;
   }
 

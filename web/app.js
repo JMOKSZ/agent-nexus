@@ -136,6 +136,7 @@ function buildSettings() {
       <span class="sa-name">${a?.name || id.toUpperCase()}</span>
       <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${MODEL_HINTS[id] || '模型（留空=默认）'}" spellcheck="false">
       <input id="sa-${id}" value="${esc(cfg.extraArgs || '')}" placeholder='附加参数，如 --flag value（原样追加到 CLI）' spellcheck="false">
+      <input id="sc-${id}" type="number" min="0" max="4000" step="100" value="${cfg.ctxChars ?? ''}" placeholder="上下文预算字符数（0=关闭注入）" title="注入到该 agent prompt 的共享记忆/上下文预算（字符）">
     </div>`;
   }).join('');
   $('#set-themes').innerHTML = Object.entries(THEME_SW).map(([t, c]) =>
@@ -177,7 +178,13 @@ $('#set-opacity').addEventListener('input', () => applyUI(currentUiDraft()));
 $('#set-save').addEventListener('click', async () => {
   const agents = {};
   for (const id of AGENT_ORDER) {
-    agents[id] = { model: $(`#sm-${id}`).value.trim(), extraArgs: $(`#sa-${id}`).value.trim() };
+    const ctx = $(`#sc-${id}`).value.trim();
+    agents[id] = {
+      model: $(`#sm-${id}`).value.trim(),
+      extraArgs: $(`#sa-${id}`).value.trim(),
+      // empty field keeps the previously saved budget instead of zeroing it
+      ctxChars: ctx === '' ? (state.settings?.agents[id]?.ctxChars ?? 900) : Number(ctx),
+    };
   }
   const res = await fetch('/api/settings', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -267,7 +274,68 @@ function addFeed(msg) {
     `<div class="f-item ${msg.kind}"><b style="color:${color}">${esc(name)}</b>${toName ? ` → ${esc(toName)}` : ''}${attMark}: ${esc(preview)}<span class="f-time">${fmtTime(msg.ts)}</span></div>`);
   while (feed.children.length > 120) feed.lastChild.remove();
   $('#feed-count').textContent = ++state.feedCount;
+  if (msg.kind === 'memo') loadMemories(); // shared memory changed
 }
+
+/* ── memory panel ── */
+let memTab = 'feed';
+function setMemTab(tab) {
+  memTab = tab;
+  $('#tab-feed').classList.toggle('active', tab === 'feed');
+  $('#tab-mem').classList.toggle('active', tab === 'mem');
+  $('#feed').hidden = tab !== 'feed';
+  $('#mem-panel').hidden = tab !== 'mem';
+  if (tab === 'mem') loadMemories();
+}
+$('#tab-feed').addEventListener('click', () => setMemTab('feed'));
+$('#tab-mem').addEventListener('click', () => setMemTab('mem'));
+
+async function loadMemories(q = $('#mem-q').value.trim()) {
+  const res = await fetch('/api/memories' + (q ? `?q=${encodeURIComponent(q)}` : ''));
+  const { memories } = await res.json();
+  if (!q) $('#mem-count').textContent = memories.length ? ` ${memories.length}` : '';
+  const list = $('#mem-list');
+  if (!memories.length) {
+    list.innerHTML = `<div class="mem-empty">${q ? '没有匹配的记忆' : '共享记忆为空<br>用 /remember 或下方输入框写入'}</div>`;
+    return;
+  }
+  list.innerHTML = memories.map((m) => `
+    <div class="mem-item">
+      <div class="m-head">
+        <span class="m-kind">#${m.id} ${esc(m.kind)}</span>
+        <span class="m-src">${m.trust === 'user' ? '你' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
+        <button class="m-x" data-id="${m.id}" title="停用（可溯源，不物理删除）">✕</button>
+      </div>
+      ${esc(m.text)}
+    </div>`).join('');
+  list.querySelectorAll('.m-x').forEach((b) =>
+    b.addEventListener('click', async () => {
+      await fetch('/api/memories/retire', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: Number(b.dataset.id) }),
+      });
+      loadMemories();
+    }));
+}
+
+let memQTimer = null;
+$('#mem-q').addEventListener('input', () => {
+  clearTimeout(memQTimer);
+  memQTimer = setTimeout(() => loadMemories(), 250);
+});
+
+async function addMemoryFromPanel() {
+  const text = $('#mem-text').value.trim();
+  if (!text) return;
+  await fetch('/api/memories', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind: $('#mem-kind').value, text }),
+  });
+  $('#mem-text').value = '';
+  loadMemories();
+}
+$('#mem-add-btn').addEventListener('click', addMemoryFromPanel);
+$('#mem-text').addEventListener('keydown', (e) => { if (e.key === 'Enter') addMemoryFromPanel(); });
 
 /* ── streaming deltas ── */
 function deltaStart({ agent, deltaId, from }) {
@@ -453,4 +521,5 @@ document.addEventListener('keydown', (e) => {
 });
 
 loadSettings();
+loadMemories();
 connect();

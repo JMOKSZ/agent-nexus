@@ -89,15 +89,66 @@ const clip = (s, n) => {
   return one.length > n ? one.slice(0, n) + '…' : one;
 };
 
+/* ── relevance recall ──
+ * JS-side scoring instead of FTS5: FTS5's trigram tokenizer cannot match CJK
+ * terms shorter than 3 chars (verified: 记忆/端口/赛博 return zero rows), and
+ * short Chinese terms are the common case here. N is small (hundreds), so
+ * scanning active memories and scoring by latin-word + CJK-bigram overlap is
+ * both fast and strictly better for mixed zh/en content. */
+
+const CJK_RUN = /[一-鿿䀀-䶿]+/g;
+const LATIN_WORD = /[a-z0-9_.:/-]{2,}/g;
+
+function queryTerms(q) {
+  const lower = String(q || '').toLowerCase();
+  const terms = [];
+  for (const m of lower.matchAll(LATIN_WORD)) terms.push({ t: m[0], w: 3 });
+  for (const m of lower.matchAll(CJK_RUN)) {
+    const run = m[0];
+    if (run.length === 1) terms.push({ t: run, w: 0.5 });
+    else {
+      // whole-run term: an exact 2-char query must clear the noise floor by itself
+      terms.push({ t: run, w: Math.min(run.length, 4) });
+      if (run.length > 2) for (let i = 0; i < run.length - 1; i++) terms.push({ t: run.slice(i, i + 2), w: 1 });
+    }
+  }
+  return terms;
+}
+
+export function recallMemories(query, limit = 6) {
+  const terms = queryTerms(query);
+  if (!terms.length) return [];
+  const now = Date.now();
+  const all = getDb().prepare(
+    "SELECT id, ts, kind, text, trust, source FROM memories WHERE status = 'active'",
+  ).all();
+  const scored = [];
+  for (const m of all) {
+    const text = m.text.toLowerCase();
+    let score = 0;
+    for (const { t, w } of terms) if (text.includes(t)) score += w;
+    if (score < 2) continue; // noise floor: a single bigram hit isn't relevance
+    if (m.trust === 'user') score *= 1.6;
+    const ageDays = (now - m.ts) / 86400000;
+    score *= 1 + Math.max(0, 0.3 - ageDays * 0.01); // mild recency boost
+    scored.push({ ...m, score });
+  }
+  return scored.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
 const hhmm = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' });
 
 // Prompt prefix giving an agent the shared memories + its recent context.
+// Memory selection = latest 3 ∪ top-K recalled by the current query.
 // Stateless agents (dsh) and inter-agent dispatches consume the full block;
 // sessioned agents get memories only (their session already covers history).
-export function buildContextBlock(agentId, { maxChars = 1600, memLimit = 8, eventLimit = 8, includeEvents = true } = {}) {
+export function buildContextBlock(agentId, { maxChars = 1600, memLimit = 8, eventLimit = 8, includeEvents = true, query = '' } = {}) {
   const sections = [];
   try {
-    const mems = listMemories(memLimit).reverse();
+    const byId = new Map();
+    for (const m of listMemories(3)) byId.set(m.id, m); // recency floor
+    if (query) for (const m of recallMemories(query, memLimit)) byId.set(m.id, m);
+    const mems = [...byId.values()].sort((a, b) => a.id - b.id).slice(0, memLimit + 3);
     if (mems.length) {
       sections.push('[共享记忆]\n' + mems.map((m) => `- (#${m.id} ${m.kind}${m.trust === 'user' ? '' : ` · by ${m.source || 'agent'}`}) ${clip(m.text, 160)}`).join('\n'));
     }

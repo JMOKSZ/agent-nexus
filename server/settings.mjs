@@ -6,10 +6,10 @@ const FILE = join(homedir(), '.agent-nexus', 'settings.json');
 
 const DEFAULTS = {
   agents: {
-    claude: { model: '', extraArgs: '' },
-    codex: { model: '', extraArgs: '' },
-    dsh: { model: '', extraArgs: '' },
-    openclaw: { model: '', extraArgs: '' },
+    claude: { model: '', extraArgs: '', ctxChars: 900 },
+    codex: { model: '', extraArgs: '', ctxChars: 900 },
+    dsh: { model: '', extraArgs: '', ctxChars: 1800 },
+    openclaw: { model: '', extraArgs: '', ctxChars: 700 },
   },
   ui: { theme: 'cyberpunk', focusOpacity: 0.7 },
 };
@@ -23,7 +23,9 @@ export function loadSettings() {
   try {
     const d = JSON.parse(readFileSync(FILE, 'utf8'));
     cache = {
-      agents: { ...structuredClone(DEFAULTS.agents), ...d.agents },
+      // deep-merge per agent so new keys (e.g. ctxChars) get defaults on old files
+      agents: Object.fromEntries(Object.keys(DEFAULTS.agents).map((id) =>
+        [id, { ...DEFAULTS.agents[id], ...(d.agents?.[id] || {}) }])),
       ui: { ...DEFAULTS.ui, ...d.ui },
     };
   } catch {
@@ -37,9 +39,11 @@ export function saveSettings(patch) {
   if (patch?.agents && typeof patch.agents === 'object') {
     for (const [k, v] of Object.entries(patch.agents)) {
       if (!(k in cur.agents) || !v) continue;
+      const ctx = Number(v.ctxChars);
       cur.agents[k] = {
         model: String(v.model || '').slice(0, 160),
         extraArgs: String(v.extraArgs || '').slice(0, 300),
+        ctxChars: Number.isFinite(ctx) ? Math.min(4000, Math.max(0, Math.round(ctx))) : (cur.agents[k].ctxChars ?? 900),
       };
     }
   }

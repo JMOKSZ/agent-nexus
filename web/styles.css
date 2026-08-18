@@ -183,6 +183,52 @@ body {
   padding: 10px 12px; border-bottom: 1px solid var(--line);
   letter-spacing: 2px; font-size: 11px; color: var(--dim);
 }
+.ftabs { display: flex; gap: 4px; }
+.ftab {
+  background: none; border: 1px solid transparent; border-radius: 4px;
+  font-family: var(--mono); font-size: 10.5px; letter-spacing: 1.5px;
+  color: var(--dim); padding: 3px 8px; cursor: pointer; transition: all .2s;
+}
+.ftab:hover { color: var(--text); }
+.ftab.active { color: var(--brand); border-color: var(--line); background: color-mix(in srgb, var(--brand) 8%, transparent); }
+#mem-count { color: var(--brand); opacity: .8; }
+
+/* ── memory panel ── */
+#mem-panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+#mem-panel[hidden] { display: none; }
+.mem-toolbar { padding: 8px; border-bottom: 1px solid var(--line); }
+#mem-q {
+  width: 100%; background: rgba(4, 8, 16, .7); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 8px; outline: none;
+}
+#mem-q:focus { border-color: var(--brand); }
+#mem-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.mem-item {
+  padding: 6px 9px; border-left: 2px solid var(--dsh); font-size: 11px; line-height: 1.5;
+  background: rgba(255,255,255,.015); border-radius: 0 4px 4px 0; animation: slidein .25s ease;
+}
+.mem-item .m-head { display: flex; align-items: center; gap: 6px; font-size: 9.5px; color: var(--dim); letter-spacing: 1px; margin-bottom: 2px; }
+.mem-item .m-kind { color: var(--brand); }
+.mem-item .m-src { opacity: .7; }
+.mem-item .m-x { margin-left: auto; background: none; border: none; color: var(--dim); cursor: pointer; font-family: var(--mono); font-size: 11px; padding: 0 2px; }
+.mem-item .m-x:hover { color: var(--danger); }
+.mem-empty { margin: auto; color: var(--dim); font-size: 10.5px; opacity: .6; text-align: center; padding: 20px 10px; }
+.mem-add { display: flex; gap: 6px; padding: 8px; border-top: 1px solid var(--line); }
+.mem-add select {
+  background: rgba(4, 8, 16, .7); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--dim); font-family: var(--mono); font-size: 10.5px; padding: 4px; outline: none;
+}
+#mem-text {
+  flex: 1; min-width: 0; background: rgba(4, 8, 16, .7); border: 1px solid var(--line); border-radius: 4px;
+  color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 8px; outline: none;
+}
+#mem-text:focus { border-color: var(--dsh); }
+#mem-add-btn {
+  background: color-mix(in srgb, var(--dsh) 12%, transparent); border: 1px solid var(--dsh);
+  color: var(--dsh); border-radius: 4px; padding: 4px 10px; cursor: pointer; font-family: var(--mono);
+  transition: all .2s;
+}
+#mem-add-btn:hover { box-shadow: 0 0 10px color-mix(in srgb, var(--dsh) 40%, transparent); }
 .feed-count { color: var(--brand); }
 #feed { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .f-item { padding: 6px 9px; border-left: 2px solid var(--line); font-size: 11px; line-height: 1.5; color: var(--dim); animation: slidein .25s ease; background: rgba(255,255,255,.015); border-radius: 0 4px 4px 0; }
@@ -324,7 +370,7 @@ body {
   border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px;
   background: rgba(255, 255, 255, .015);
 }
-.set-agent .sa-name { grid-row: span 2; font-weight: 700; letter-spacing: 1px; font-size: 11px; color: var(--ac); text-shadow: 0 0 8px color-mix(in srgb, var(--ac) 50%, transparent); }
+.set-agent .sa-name { grid-row: span 3; font-weight: 700; letter-spacing: 1px; font-size: 11px; color: var(--ac); text-shadow: 0 0 8px color-mix(in srgb, var(--ac) 50%, transparent); }
 .set-agent input {
   background: rgba(4, 8, 16, .7); border: 1px solid var(--line); border-radius: 4px;
   color: var(--text); font-family: var(--mono); font-size: 11.5px; padding: 6px 9px; outline: none;

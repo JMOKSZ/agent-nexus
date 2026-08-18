@@ -57,10 +57,29 @@
   </section>
   <aside id="feed-panel">
     <div class="feed-head">
-      <span>UPLINK FEED</span>
+      <div class="ftabs">
+        <button class="ftab active" id="tab-feed">UPLINK</button>
+        <button class="ftab" id="tab-mem">MEMORY 🧠 <span id="mem-count"></span></button>
+      </div>
       <span class="feed-count" id="feed-count">0</span>
     </div>
     <div id="feed"></div>
+    <div id="mem-panel" hidden>
+      <div class="mem-toolbar">
+        <input id="mem-q" placeholder="搜索记忆（相关度排序）…" spellcheck="false">
+      </div>
+      <div id="mem-list"></div>
+      <div class="mem-add">
+        <select id="mem-kind">
+          <option value="fact">fact</option>
+          <option value="decision">decision</option>
+          <option value="preference">preference</option>
+          <option value="task">task</option>
+        </select>
+        <input id="mem-text" placeholder="写入新记忆…" spellcheck="false">
+        <button id="mem-add-btn" title="写入共享记忆">＋</button>
+      </div>
+    </div>
   </aside>
 </main>
 
