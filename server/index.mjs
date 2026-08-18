@@ -97,6 +97,26 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  // Agent-to-agent synchronous ask: any local process (the agents themselves
+  // via curl, or bin/nexus ask) queues a task and gets the reply back.
+  if (url.pathname === '/api/agent/ask' && req.method === 'POST') {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
+    const from = typeof body.from === 'string' ? body.from.toLowerCase() : 'cli';
+    const to = typeof body.to === 'string' ? body.to.toLowerCase() : '';
+    const text = typeof body.text === 'string' ? body.text.slice(0, 32_000) : '';
+    if (!to || !text.trim()) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: 'need {from?, to, text}' }));
+      return;
+    }
+    const timeoutMs = Math.min(Math.max(Number(body.timeoutMs) || 600_000, 1000), 600_000);
+    const result = await hub.ask(from, to, text, timeoutMs);
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(result));
+    return;
+  }
+
   if (url.pathname === '/api/settings' && req.method === 'GET') {
     const fields = Object.fromEntries(agentsList.map((a) =>
       [a.id, ADAPTER_TYPES[a.adapter].settingFields || []]));

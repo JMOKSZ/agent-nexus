@@ -5,5 +5,29 @@ case "$1" in
   stop)    launchctl unload ~/Library/LaunchAgents/com.agent-nexus.plist; echo stopped ;;
   restart) launchctl kickstart -k gui/$(id -u)/com.agent-nexus && echo restarted ;;
   logs)    tail -f ~/.agent-nexus/nexus.log ;;
-  *)       echo "usage: nexus {start|stop|restart|logs}" ;;
+  ask)
+    shift
+    agent="$1"; shift 2>/dev/null
+    if [ -z "$agent" ] || [ $# -eq 0 ]; then echo "usage: nexus ask <agent> <task...>  (env NEXUS_ASK_FROM sets the sender id)" >&2; exit 1; fi
+    NEXUS_ASK_AGENT="$agent" NEXUS_ASK_TEXT="$*" node --no-warnings -e '
+      (async () => {
+        const body = JSON.stringify({
+          from: process.env.NEXUS_ASK_FROM || "cli",
+          to: process.env.NEXUS_ASK_AGENT,
+          text: process.env.NEXUS_ASK_TEXT,
+        });
+        try {
+          const r = await fetch("http://127.0.0.1:7700/api/agent/ask", {
+            method: "POST", headers: { "Content-Type": "application/json" }, body,
+          });
+          const d = await r.json();
+          if (d.reply) console.log(d.reply);
+          if (d.note) console.error("note: " + d.note);
+          if (!d.ok) { console.error("error: " + (d.error || "unknown")); process.exit(1); }
+        } catch (e) {
+          console.error("error: nexus unreachable — " + (e.cause?.code || e.message));
+          process.exit(1);
+        }
+      })();' ;;
+  *)       echo "usage: nexus {start|stop|restart|logs|ask}" ;;
 esac

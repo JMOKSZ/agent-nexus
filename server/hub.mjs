@@ -148,7 +148,7 @@ export class Hub {
   }
 
   async execute(agentId, adapter, text, { from, depth, attachments, gen }) {
-    if (gen !== (this.gen[agentId] || 0)) return; // cancelled while queued
+    if (gen !== (this.gen[agentId] || 0)) return null; // cancelled while queued
     const started = Date.now();
     this.setStatus(agentId, { state: 'running', task: text.slice(0, 120), lastError: null });
     const deltaId = randomUUID().slice(0, 8);
@@ -184,16 +184,18 @@ export class Hub {
       this.emit('delta-end', { agent: agentId, deltaId });
       const latency = Date.now() - started;
       this.setStatus(agentId, { state: 'idle', task: null, lastLatencyMs: latency });
+      const replyText = result.text || streamed || '(empty reply)';
       this.pushMessage({
         from: agentId,
         to: from === 'user' ? 'user' : from,
-        text: result.text || streamed || '(empty reply)',
+        text: replyText,
         kind: 'reply',
         latencyMs: latency,
         usage: result.usage || null,
       });
       if (depth < MAX_DISPATCH_DEPTH) this.scanDispatch(agentId, result.text || '', depth);
       this.scanMemo(agentId, result.text || '');
+      return { text: replyText, latencyMs: latency };
     } catch (err) {
       this.emit('delta-end', { agent: agentId, deltaId });
       delete this.procs[agentId];
@@ -201,12 +203,36 @@ export class Hub {
         this.stopped[agentId] = false;
         this.setStatus(agentId, { state: 'idle', task: null });
         this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} stopped manually`, kind: 'error' });
-        return;
+        return { stopped: true };
       }
       this.setStatus(agentId, { state: 'error', task: null, lastError: String(err.message || err) });
       this.pushMessage({ from: 'system', to: agentId, text: `⚠ ${this.agents[agentId].name} error: ${err.message || err}`, kind: 'error' });
       setTimeout(() => this.setStatus(agentId, { state: 'idle' }), 5000);
+      return { error: String(err.message || err) };
     }
+  }
+
+  // Agent/script-initiated synchronous ask (POST /api/agent/ask): queue a task
+  // for the target agent and return its reply. Terminal agents can't be
+  // captured, so for them the task is typed into the window and we return
+  // immediately with async:true.
+  async ask(from, to, text, timeoutMs = 600_000) {
+    if (from !== 'user' && from !== 'cli' && !this.agents[from]) return { ok: false, error: `unknown from: ${from}` };
+    if (!this.agents[to]) return { ok: false, error: `unknown agent: ${to}` };
+    if (from === to) return { ok: false, error: 'from and to are the same agent' };
+    const fromName = this.agents[from]?.name || from;
+    this.pushMessage({ from, to, text, kind: 'dispatch' });
+    if (this.terminalIds.has(to)) {
+      termManager.typeText(to, `[from ${fromName}] ${text}`);
+      return { ok: true, async: true, note: `${this.agents[to].name} is a real terminal — the task was typed into its window; its reply is not capturable` };
+    }
+    const run = this.enqueue(to, `[from ${fromName}] ${text}`, { from });
+    const res = await Promise.race([run, new Promise((r) => setTimeout(() => r('__timeout__'), timeoutMs))]);
+    if (res === '__timeout__') return { ok: true, timeout: true, note: 'still running; the reply will appear in the window' };
+    if (!res) return { ok: false, error: 'task was cancelled before running' };
+    if (res.stopped) return { ok: false, error: 'stopped manually' };
+    if (res.error) return { ok: false, error: res.error };
+    return { ok: true, reply: res.text, latencyMs: res.latencyMs };
   }
 
   // Inter-agent dispatch: an agent reply may contain lines like
