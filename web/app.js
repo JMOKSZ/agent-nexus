@@ -162,6 +162,7 @@ function applyFocus() {
   const quad = $('#quad');
   const focusing = state.target !== 'broadcast' && state.agents[state.target];
   quad.classList.toggle('focus', !!focusing);
+  document.body.classList.toggle('focus-mode', !!focusing);
   for (const el of quad.querySelectorAll('.term')) {
     el.classList.toggle('focused', focusing && el.id === `term-${state.target}`);
   }

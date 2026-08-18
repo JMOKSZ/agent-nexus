@@ -158,7 +158,7 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 }
 .a-task.show { display: block; }
 
-.term-body { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.term-body { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; overscroll-behavior: contain; }
 .term-body::-webkit-scrollbar { width: 6px; }
 .term-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 
@@ -206,7 +206,7 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
   color: var(--text); font-family: var(--mono); font-size: 11px; padding: 5px 8px; outline: none;
 }
 #mem-q:focus { border-color: var(--brand); }
-#mem-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#mem-list { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; overscroll-behavior: contain; }
 .mem-item {
   padding: 6px 9px; border-left: 2px solid var(--ok); font-size: 11px; line-height: 1.5;
   background: color-mix(in srgb, var(--text) 3%, transparent); border-radius: 0 4px 4px 0; animation: slidein .25s ease;
@@ -233,7 +233,7 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 }
 #mem-text:focus { border-color: var(--ok); }
 .feed-count { color: var(--brand); }
-#feed { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+#feed { flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 6px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; overscroll-behavior: contain; }
 .f-item { padding: 6px 9px; border-left: 2px solid var(--line); font-size: 11px; line-height: 1.5; color: var(--dim); animation: slidein .25s ease; background: color-mix(in srgb, var(--text) 3%, transparent); border-radius: 0 4px 4px 0; }
 .f-item b { letter-spacing: 1px; }
 .f-item .f-time { display: block; font-size: 9px; opacity: .5; margin-top: 2px; }
@@ -303,7 +303,7 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 /* ── embedded xterm ── */
 .term-body.xterm-host { padding: 2px 4px; overflow: hidden; }
 .term-body.xterm-host .xterm { height: 100%; }
-.term-body.xterm-host .xterm-viewport { scrollbar-width: thin; }
+.term-body.xterm-host .xterm-viewport { scrollbar-width: thin; overscroll-behavior: contain; }
 /* xterm.css paints the viewport solid #000 — let the .term panel gradient show through */
 .term-body.xterm-host .xterm .xterm-viewport,
 .term-body.xterm-host .xterm .xterm-screen { background-color: transparent; }
@@ -367,6 +367,9 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 /* siblings stay visible but dimmed so the focused window's translucency
    (Ghostty-style --focus-op) has something real to show through */
 #quad.focus .term:not(.focused) { opacity: .3; filter: saturate(.5); pointer-events: none; }
+/* lock the deck while focused: on touch layouts #deck is the page scroller,
+   and without this swipes on the popup chain-scroll the layer underneath */
+body.focus-mode #deck { overflow: hidden; }
 .term.focused {
   position: fixed; z-index: 30;
   top: 56px; left: 14px; right: 14px; bottom: 76px;
