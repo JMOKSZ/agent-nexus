@@ -19,6 +19,14 @@ function readHead(file, bytes = 262144) {
   } catch { return ''; }
 }
 
+// Hub prompts start with an injected [共享记忆]/[最近相关上下文] block —
+// strip those sections so session previews show the actual user text.
+function realSnippet(text) {
+  const parts = text.split('\n\n').filter((p) =>
+    !p.startsWith('[共享记忆]') && !p.startsWith('[最近相关上下文]'));
+  return (parts.join('\n\n').trim() || text).replace(/\s+/g, ' ').slice(0, 60);
+}
+
 function sessionInfo(file) {
   const head = readHead(file);
   let id = null;
@@ -36,7 +44,7 @@ function sessionInfo(file) {
     if (!snippet && ev.type === 'event_msg' && ev.payload?.type === 'user_message') {
       const text = ev.payload.message;
       if (typeof text === 'string' && text.trim() && !text.startsWith('<')) {
-        snippet = text.replace(/\s+/g, ' ').slice(0, 60);
+        snippet = realSnippet(text);
       }
     }
     if (id && cwd && snippet) break;
