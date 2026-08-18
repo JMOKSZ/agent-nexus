@@ -1,7 +1,8 @@
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { join, extname, dirname } from 'node:path';
+import { gzipSync } from 'node:zlib';
+import { join, extname, dirname, sep } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -47,6 +48,51 @@ termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
 const wss = new WebSocketServer({ noServer: true });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.icns': 'image/icns', '.webmanifest': 'application/manifest+json' };
+
+// Static serving tuned for slow links (tailnet from phone/iPad): gzip text
+// assets, ETag so no-cache revalidations are cheap 304s, and long caching for
+// the content-stable vendor/icons dirs. Bodies are cached in memory keyed by
+// path+mtime — WEB_DIR holds only a few MB of first-party files.
+const TEXTUAL = new Set(['.html', '.js', '.css', '.svg', '.webmanifest']);
+const staticCache = new Map();
+
+function serveStatic(req, res, file) {
+  const st = statSync(file);
+  let entry = staticCache.get(file);
+  if (!entry || entry.mtimeMs !== st.mtimeMs) {
+    const raw = readFileSync(file);
+    const ext = extname(file);
+    entry = {
+      mtimeMs: st.mtimeMs,
+      raw,
+      gz: TEXTUAL.has(ext) && raw.length > 1024 ? gzipSync(raw) : null,
+      etag: `"${Math.round(st.mtimeMs)}-${raw.length}"`,
+      type: MIME[ext] || 'application/octet-stream',
+    };
+    staticCache.set(file, entry);
+  }
+  const longCache = file.includes(`${sep}vendor${sep}`) || file.includes(`${sep}icons${sep}`);
+  const headers = {
+    'Content-Type': entry.type,
+    ETag: entry.etag,
+    'Cache-Control': longCache ? 'public, max-age=86400' : 'no-cache',
+  };
+  if (req.headers['if-none-match'] === entry.etag) {
+    res.writeHead(304, headers);
+    res.end();
+    return;
+  }
+  if (entry.gz && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+    headers['Content-Encoding'] = 'gzip';
+    headers['Content-Length'] = entry.gz.length;
+    res.writeHead(200, headers);
+    res.end(entry.gz);
+    return;
+  }
+  headers['Content-Length'] = entry.raw.length;
+  res.writeHead(200, headers);
+  res.end(entry.raw);
+}
 
 function readBody(req, limit = 8e6) {
   return new Promise((resolve, reject) => {
@@ -290,8 +336,7 @@ const server = createServer(async (req, res) => {
     res.writeHead(404).end('not found');
     return;
   }
-  res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache' });
-  res.end(readFileSync(file));
+  serveStatic(req, res, file);
 });
 
 server.listen(PORT, HOST, () => {
