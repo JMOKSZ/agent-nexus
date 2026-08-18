@@ -36,7 +36,7 @@ function buildDeck(agents) {
         <span class="a-meta">
           <span class="a-latency" id="lat-${id}"></span>
           <button class="a-stop" id="stop-${id}" data-agent="${id}" title="停止当前任务并清空队列">⏹</button>
-          <button class="a-reset" data-agent="${id}" title="清除该 agent 的会话上下文">RESET</button>
+          ${a.stateless ? '' : `<button class="a-reset" data-agent="${id}" title="清除该 agent 的会话上下文并清空窗口显示">RESET</button>`}
         </span>
       </div>
       <div class="a-task" id="task-${id}"></div>
@@ -162,6 +162,10 @@ $('#settings-btn').addEventListener('click', () => {
   buildSettings();
   $('#set-status').textContent = '';
   $('#settings-overlay').hidden = false;
+});
+$('#clear-btn').addEventListener('click', async () => {
+  if (!confirm('清除全部窗口的显示内容？\n共享记忆与事件日志（蒸馏源）不受影响。')) return;
+  await fetch('/api/display/clear', { method: 'POST' });
 });
 const closeSettings = (revert) => {
   $('#settings-overlay').hidden = true;
@@ -417,6 +421,21 @@ function connect() {
     setConn(true);
   });
   es.addEventListener('msg', (e) => renderMsg(JSON.parse(e.data)));
+  es.addEventListener('display-clear', (e) => {
+    const { agent } = JSON.parse(e.data);
+    const clearBody = (id) => {
+      const b = termBody(id);
+      if (b) b.innerHTML = '<div class="empty-hint">STANDBY — 等待指令</div>';
+    };
+    if (agent) {
+      clearBody(agent);
+    } else {
+      AGENT_ORDER.forEach(clearBody);
+      $('#feed').innerHTML = '';
+      state.feedCount = 0;
+      $('#feed-count').textContent = '0';
+    }
+  });
   es.addEventListener('status', (e) => renderStatus(JSON.parse(e.data)));
   es.addEventListener('delta-start', (e) => deltaStart(JSON.parse(e.data)));
   es.addEventListener('delta', (e) => delta(JSON.parse(e.data)));

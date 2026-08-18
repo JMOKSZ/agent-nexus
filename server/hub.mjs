@@ -9,7 +9,7 @@ const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
 const MAX_HISTORY = 300;
 const MAX_DISPATCH_DEPTH = 4;
-const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill']);
+const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill', 'clearall']);
 
 const DISTILL_PROMPT = `你是 NEXUS 多 agent 系统的记忆蒸馏器。下面是系统近期的事件日志（用户与各 agent 的交互记录）。
 请提炼出值得长期记住的信息，每条一行，严格使用以下格式（除此以外不要输出任何内容）：
@@ -103,6 +103,25 @@ export class Hub {
     const run = prev.then(() => this.execute(agentId, adapter, text, { from, depth, attachments, gen: this.gen[agentId] || 0 }));
     this.queues[agentId] = run.catch(() => {});
     return run;
+  }
+
+  // Reset one agent: drop its session and purge its messages from display
+  // history (the sqlite event log and shared memories are untouched).
+  resetAgent(agentId) {
+    const hadSession = !!this.sessions[agentId];
+    delete this.sessions[agentId];
+    this.messages = this.messages.filter((m) => m.from !== agentId && m.to !== agentId);
+    this.save();
+    this.emit('display-clear', { agent: agentId });
+    return hadSession;
+  }
+
+  // Wipe display history in every terminal + feed. Display only — the sqlite
+  // event log (distill source) and memories survive.
+  clearDisplay() {
+    this.messages = [];
+    this.save();
+    this.emit('display-clear', {});
   }
 
   // Kill the active run and drop everything still queued for this agent.
@@ -251,6 +270,11 @@ export class Hub {
       this.runDistill();
       return;
     }
+    if (cmd === 'clearall') {
+      this.clearDisplay();
+      say('🧹 全部窗口显示已清空（共享记忆与事件日志保留，不受影响）');
+      return;
+    }
   }
 
   // Distillation job: the distiller agent (config "distiller": true, else the
@@ -369,7 +393,7 @@ export class Hub {
 
   snapshot() {
     return {
-      agents: Object.fromEntries(Object.entries(this.agents).map(([id, a]) => [id, { ...a, ...this.status[id], session: this.sessions[id] || null }])),
+      agents: Object.fromEntries(Object.entries(this.agents).map(([id, a]) => [id, { ...a, stateless: !!this.adapters[id]?.stateless, ...this.status[id], session: this.sessions[id] || null }])),
       messages: this.messages.slice(-MAX_HISTORY),
     };
   }

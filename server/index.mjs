@@ -217,11 +217,27 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/reset' && req.method === 'POST') {
     const body = JSON.parse(await readBody(req) || '{}');
     const id = body.agent;
-    if (id && hub.sessions[id]) {
-      delete hub.sessions[id];
-      hub.save();
-      hub.pushMessage({ from: 'system', to: id, text: `↺ ${id} session reset`, kind: 'error' });
+    if (id && hub.adapters[id]) {
+      const stateless = !!hub.adapters[id].stateless;
+      const hadSession = hub.resetAgent(id);
+      const name = hub.agents[id].name;
+      hub.pushMessage({
+        from: 'system', to: id, kind: 'error',
+        text: stateless
+          ? `↺ ${name} 是无状态 agent（每条消息独立，无会话可清），窗口显示已清空`
+          : hadSession
+            ? `↺ ${name} 会话已重置，窗口显示已清空`
+            : `↺ ${name} 当前没有活动会话，窗口显示已清空`,
+      });
     }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('{"ok":true}');
+    return;
+  }
+
+  if (url.pathname === '/api/display/clear' && req.method === 'POST') {
+    hub.clearDisplay();
+    hub.pushMessage({ from: 'system', to: 'user', text: '🧹 全部窗口显示已清空（共享记忆与事件日志保留，不受影响）', kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end('{"ok":true}');
     return;
