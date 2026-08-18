@@ -6,5 +6,14 @@
   "scripts": {
     "start": "node server/index.mjs"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
+    "node-pty": "^1.1.0",
+    "ws": "^8.21.3"
+  },
+  "allowScripts": {
+    "node-pty@1.1.0": true
+  }
 }

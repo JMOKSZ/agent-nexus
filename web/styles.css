@@ -309,6 +309,11 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 #send-btn:hover { background: linear-gradient(135deg, color-mix(in srgb, var(--brand) 30%, transparent), color-mix(in srgb, var(--brand) 12%, transparent)); box-shadow: 0 0 18px color-mix(in srgb, var(--brand) 35%, transparent); }
 #send-btn:active { transform: scale(.97); }
 
+/* ── embedded xterm ── */
+.term-body.xterm-host { padding: 2px 4px; overflow: hidden; }
+.term-body.xterm-host .xterm { height: 100%; }
+.term-body.xterm-host .xterm-viewport { scrollbar-width: thin; }
+
 /* ── tablet / iPad (≤1100px): terminals stack vertically, feed becomes a drawer ── */
 #feed-btn { display: none; }
 @media (max-width: 1100px) {

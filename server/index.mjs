@@ -7,10 +7,12 @@ import { fileURLToPath } from 'node:url';
 
 import { Hub } from './hub.mjs';
 import { UPLOAD_DIR } from './runner.mjs';
-import { loadSettings, saveSettings } from './settings.mjs';
+import { loadSettings, saveSettings, getAgentCfg, splitArgs } from './settings.mjs';
 import { listMemories, recallMemories, addMemory, retireMemory, approveMemory, restoreMemory, updateMemory, listAllMemories, listStaged, normalizeKind } from './memory.mjs';
 import { ADAPTER_TYPES } from './adapters/index.mjs';
 import { loadAgentsConfig } from './agents-config.mjs';
+import { termManager } from './terminal.mjs';
+import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.NEXUS_PORT || 7700);
 const HOST = '127.0.0.1';
@@ -32,6 +34,17 @@ const agentsList = loadAgentsConfig().filter((a) => {
 });
 const adapters = Object.fromEntries(agentsList.map((a) => [a.id, ADAPTER_TYPES[a.adapter]]));
 const hub = new Hub(adapters, agentsList);
+
+// Terminal agents run as persistent interactive PTYs (real CLI, not headless).
+termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
+  const cfg = getAgentCfg(a.id);
+  const args = [];
+  if (cfg.model) args.push('--model', cfg.model);
+  args.push(...splitArgs(cfg.extraArgs));
+  return { id: a.id, cmd: a.cmd || a.id, args, cwd: a.cwd };
+}));
+
+const wss = new WebSocketServer({ noServer: true });
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png' };
 
@@ -263,4 +276,23 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`[agent-nexus] command deck online → http://${HOST}:${PORT}`);
+});
+
+// WebSocket bridge for terminal agents: /ws/term/<agentId>
+// client→server frames are JSON: {type:'in',data} | {type:'resize',cols,rows}
+// server→client frames: one JSON hello, then raw PTY output strings.
+server.on('upgrade', (req, socket, head) => {
+  const m = (req.url || '').match(/^\/ws\/term\/([\w-]{1,24})$/);
+  if (!m || !termManager.has(m[1])) { socket.destroy(); return; }
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    const term = termManager.get(m[1]);
+    term.attach(ws);
+    ws.on('message', (raw) => {
+      let msg;
+      try { msg = JSON.parse(raw.toString()); } catch { return; }
+      if (msg.type === 'in' && typeof msg.data === 'string') term.write(msg.data.slice(0, 64_000));
+      else if (msg.type === 'resize') term.resize(Number(msg.cols), Number(msg.rows));
+    });
+    ws.on('close', () => term.detach(ws));
+  });
 });

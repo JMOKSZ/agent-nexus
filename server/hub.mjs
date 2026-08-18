@@ -4,6 +4,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind, eventsSince, getMeta, setMeta } from './memory.mjs';
 import { getAgentCfg } from './settings.mjs';
+import { termManager } from './terminal.mjs';
+import { attachmentNote } from './runner.mjs';
 
 const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
@@ -29,7 +31,8 @@ MEMO[task]: 进行中的任务状态或结论
 export class Hub {
   constructor(adapters, agentsList) {
     this.adapters = adapters;
-    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint, cwd: a.cwd }]));
+    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint, cwd: a.cwd, terminal: a.terminal === true }]));
+    this.terminalIds = new Set(agentsList.filter((a) => a.terminal).map((a) => a.id));
     this.agentIds = agentsList.map((a) => a.id);
     const idAlt = this.agentIds.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') || 'a^';
     this.mentionRe = new RegExp(`^@(${idAlt}|all)\\b\\s*[:：,，]?\\s*([\\s\\S]+)$`, 'i');
@@ -49,6 +52,7 @@ export class Hub {
       || this.agentIds[0];
     for (const id of this.agentIds) this.status[id] = { state: 'idle' };
     this.load();
+    for (const id of this.terminalIds) delete this.sessions[id]; // PTY agents own their session state
   }
 
   load() {
@@ -126,6 +130,10 @@ export class Hub {
 
   // Kill the active run and drop everything still queued for this agent.
   stop(agentId) {
+    if (this.terminalIds.has(agentId)) {
+      termManager.get(agentId)?.interrupt();
+      return;
+    }
     this.gen[agentId] = (this.gen[agentId] || 0) + 1;
     this.stopped[agentId] = true;
     const child = this.procs[agentId];
@@ -345,11 +353,23 @@ export class Hub {
         this.pushMessage({ from: 'system', to: 'user', text: '斜杠命令需要定向到具体 agent，例如 @claude /sessions', kind: 'error' });
         return;
       }
+      // Terminal agents run a real interactive CLI — type the command
+      // straight into the TUI instead of intercepting it.
+      if (this.terminalIds.has(to)) {
+        termManager.typeText(to, text);
+        return;
+      }
       this.handleCommand(to, text);
       return;
     }
     const targets = to === 'broadcast' ? this.agentIds : [to];
-    for (const t of targets) this.enqueue(t, text, { from: 'user', attachments });
+    for (const t of targets) {
+      if (this.terminalIds.has(t)) {
+        termManager.typeText(t, text + (attachments.length ? attachmentNote(attachments) : ''));
+        continue;
+      }
+      this.enqueue(t, text, { from: 'user', attachments });
+    }
   }
 
   // Slash commands run immediately (outside the agent queue) and never reach
@@ -395,7 +415,7 @@ export class Hub {
 
   snapshot() {
     return {
-      agents: Object.fromEntries(Object.entries(this.agents).map(([id, a]) => [id, { ...a, stateless: !!this.adapters[id]?.stateless, ...this.status[id], session: this.sessions[id] || null }])),
+      agents: Object.fromEntries(Object.entries(this.agents).map(([id, a]) => [id, { ...a, stateless: !!this.adapters[id]?.stateless, ...this.status[id], session: this.terminalIds.has(id) ? null : (this.sessions[id] || null) }])),
       messages: this.messages.slice(-MAX_HISTORY),
     };
   }

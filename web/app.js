@@ -40,9 +40,10 @@ function buildDeck(agents) {
         </span>
       </div>
       <div class="a-task" id="task-${id}"></div>
-      <div class="term-body" id="body-${id}"><div class="empty-hint">STANDBY — 等待指令</div></div>`;
+      <div class="term-body${a.terminal ? ' xterm-host' : ''}" id="body-${id}">${a.terminal ? '' : '<div class="empty-hint">STANDBY — 等待指令</div>'}</div>`;
     quad.appendChild(term);
   }
+  for (const id of AGENT_ORDER) if (state.agents[id]?.terminal) initXterm(id);
   // top LEDs
   $('#top-leds').innerHTML = AGENT_ORDER.map((id) =>
     `<span class="top-led" id="tled-${id}" style="${state.agents[id] ? `background:${state.agents[id].color}22` : ''}" title="${id}"></span>`).join('');
@@ -62,6 +63,67 @@ function buildDeck(agents) {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent: b.dataset.agent }),
     })));
+}
+
+/* ── embedded real terminals (agents with terminal:true) ── */
+const xterms = {}; // id -> { term, fit, ws }
+
+function doFit(id) {
+  const x = xterms[id];
+  if (!x) return;
+  try { x.fit.fit(); } catch { return; }
+  if (x.ws && x.ws.readyState === 1) {
+    x.ws.send(JSON.stringify({ type: 'resize', cols: x.term.cols, rows: x.term.rows }));
+  }
+}
+
+function initXterm(id) {
+  const host = $(`#body-${id}`);
+  if (!host || typeof Terminal === 'undefined') return;
+  // Deck rebuilds (e.g. SSE reconnect) destroy the host element — dispose the
+  // stale instance; the ws reconnect replays server-side scrollback.
+  if (xterms[id]) {
+    try { xterms[id].ws?.close(); xterms[id].term.dispose(); } catch { /* already gone */ }
+    delete xterms[id];
+  }
+  const accent = state.agents[id]?.color || '#00f0ff';
+  const term = new Terminal({
+    fontFamily: '"SF Mono", "Menlo", "JetBrains Mono", monospace',
+    fontSize: 12,
+    cursorBlink: true,
+    scrollback: 5000,
+    theme: {
+      background: '#00000000',
+      foreground: '#dbe7ff',
+      cursor: accent,
+      selectionBackground: '#3b4a6b88',
+    },
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  xterms[id] = { term, fit, ws: null };
+
+  const connectWs = () => {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/ws/term/${id}`);
+    xterms[id].ws = ws;
+    ws.onopen = () => doFit(id);
+    ws.onmessage = (ev) => {
+      const d = ev.data;
+      if (typeof d === 'string' && d[0] === '{') {
+        try { if (JSON.parse(d).type === 'hello') return; } catch { /* raw output */ }
+      }
+      term.write(d);
+    };
+    ws.onclose = () => setTimeout(connectWs, 2000);
+  };
+  term.onData((d) => {
+    const ws = xterms[id].ws;
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'in', data: d }));
+  });
+  connectWs();
+  new ResizeObserver(() => doFit(id)).observe(host);
 }
 
 /* ── command bar chips ── */
@@ -96,6 +158,8 @@ function applyFocus() {
   for (const el of quad.querySelectorAll('.term')) {
     el.classList.toggle('focused', focusing && el.id === `term-${state.target}`);
   }
+  // xterm needs a refit after the layout change
+  setTimeout(() => AGENT_ORDER.forEach((id) => { if (xterms[id]) doFit(id); }), 80);
 }
 
 /* ── settings / skins ── */
@@ -241,7 +305,7 @@ function terminalsFor(msg) {
     ids.add(msg.from);
     if (msg.kind === 'dispatch' && msg.to && state.agents[msg.to]) ids.add(msg.to);
   }
-  return [...ids].filter((a) => state.agents[a]);
+  return [...ids].filter((a) => state.agents[a] && !state.agents[a].terminal);
 }
 
 function attHtml(atts) {
@@ -441,6 +505,7 @@ function connect() {
   es.addEventListener('display-clear', (e) => {
     const { agent } = JSON.parse(e.data);
     const clearBody = (id) => {
+      if (state.agents[id]?.terminal) return; // live PTY content, not message history
       const b = termBody(id);
       if (b) b.innerHTML = '<div class="empty-hint">STANDBY — 等待指令</div>';
     };
