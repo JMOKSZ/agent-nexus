@@ -78,7 +78,7 @@ const projectOf = (cwd) => (cwd ? basename(cwd) : '?');
 const LIVE_MS = 10 * 60 * 1000;
 const isLive = (s) => Date.now() - s.mtime < LIVE_MS;
 const listLine = (s) =>
-  `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)}${isLive(s) ? ' · ⚡活跃中' : ''} · ${s.snippet}`;
+  `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)}${isLive(s) ? ' · ⚡live' : ''} · ${s.snippet}`;
 
 // Normalize legacy string session state.
 const asSession = (s) => (s ? (typeof s === 'string' ? { id: s, cwd: null } : s) : null);
@@ -88,9 +88,9 @@ export const claudeAdapter = {
   slashCommands: ['sessions', 'resume', 'fork', 'status'],
   settingFields: [
     {
-      key: 'effort', label: '推理强度 (--effort)',
+      key: 'effort', label: 'Reasoning effort (--effort)',
       options: [
-        { value: '', label: '默认' },
+        { value: '', label: 'default' },
         { value: 'low', label: 'low' },
         { value: 'medium', label: 'medium' },
         { value: 'high', label: 'high' },
@@ -99,7 +99,7 @@ export const claudeAdapter = {
       ],
     },
     {
-      key: 'fallbackModel', label: '备用模型 (--fallback-model，过载时自动切换)',
+      key: 'fallbackModel', label: 'Fallback model (--fallback-model, auto-switch on overload)',
       options: null, // free text
     },
   ],
@@ -154,46 +154,46 @@ export const claudeAdapter = {
       const cfg = getAgentCfg('claude');
       return {
         text: s
-          ? `CLAUDE 状态:\n• 会话: ${s.id.slice(0, 8)}（项目 ${projectOf(s.cwd)}）\n• 续接模式: --resume 生效中\n• 推理强度: ${cfg.effort || '默认'}\n• 清空: /clear · 分叉: /fork`
-          : 'CLAUDE 状态:\n• 会话: 无（下条消息开启新会话）',
+          ? `CLAUDE status:\n• Session: ${s.id.slice(0, 8)} (project ${projectOf(s.cwd)})\n• Resume mode: --resume active\n• Effort: ${cfg.effort || 'default'}\n• Clear: /clear · Fork: /fork`
+          : 'CLAUDE status:\n• Session: none (next message starts a new session)',
       };
     }
     if (cmd === 'fork') {
       const s = asSession(currentSession);
-      if (!s) return { text: '当前没有活动会话，无法分叉。先正常对话建立会话。' };
+      if (!s) return { text: 'No active session to fork. Chat normally first to establish a session.' };
       return {
         session: { ...s, fork: true },
-        text: `⑂ 下条消息将从会话 ${s.id.slice(0, 8)} 分叉出新会话（原会话保持不变）。`,
+        text: `⑂ Next message will fork a new session from ${s.id.slice(0, 8)} (the original stays untouched).`,
       };
     }
     if (cmd === 'sessions') {
       const list = listSessions(10);
-      if (!list.length) return { text: '没有找到任何 claude 会话。' };
-      return { text: `最近的 claude 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${list.map(listLine).join('\n')}` };
+      if (!list.length) return { text: 'No claude sessions found.' };
+      return { text: `Recent claude sessions (⚡=written within 10 min, may be in use elsewhere):\n${list.map(listLine).join('\n')}` };
     }
     if (cmd === 'resume') {
       const all = listSessions(100);
-      if (!all.length) return { text: '没有找到任何 claude 会话。' };
+      if (!all.length) return { text: 'No claude sessions found.' };
       const arg = args.trim();
       if (!arg) {
         // No arg → show the picker list instead of guessing a session.
-        return { text: `最近的 claude 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${all.slice(0, 10).map(listLine).join('\n')}\n\n用 /resume <前缀> 恢复（以分叉方式接续，原会话不会被修改）。` };
+        return { text: `Recent claude sessions (⚡=written within 10 min, may be in use elsewhere):\n${all.slice(0, 10).map(listLine).join('\n')}\n\nUse /resume <prefix> to resume (continues as a fork — the original session is never modified).` };
       }
       let pick;
       {
         const matches = all.filter((s) => s.id.startsWith(arg));
-        if (matches.length === 0) return { text: `没有匹配 "${arg}" 的会话。用 /sessions 查看列表。` };
+        if (matches.length === 0) return { text: `No session matches "${arg}". Use /sessions to see the list.` };
         if (matches.length > 1) {
-          return { text: `"${arg}" 匹配到多个会话，请加长前缀:\n${matches.slice(0, 8).map(listLine).join('\n')}` };
+          return { text: `"${arg}" matches multiple sessions — use a longer prefix:\n${matches.slice(0, 8).map(listLine).join('\n')}` };
         }
         pick = matches[0];
       }
-      if (!pick.cwd) return { text: `会话 ${pick.id.slice(0, 8)} 缺少 cwd 信息，无法恢复。` };
+      if (!pick.cwd) return { text: `Session ${pick.id.slice(0, 8)} has no cwd info — cannot resume.` };
       // Always fork: harness continues the context in a NEW session id, so the
       // original transcript is never appended to (it may be live elsewhere).
       return {
         session: { id: pick.id, cwd: pick.cwd, fork: true },
-        text: `✓ 已恢复会话 ${pick.id.slice(0, 8)}（项目 ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)}）\n"${pick.snippet}"\n后续消息将以分叉方式接续该会话上下文，原会话文件不会被修改。`,
+        text: `✓ Resumed session ${pick.id.slice(0, 8)} (project ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)})\n"${pick.snippet}"\nNext messages continue this context as a fork — the original transcript is never modified.`,
       };
     }
     return null; // not handled → hub falls back

@@ -20,9 +20,9 @@
   </div>
   <div class="top-status">
     <div class="led-group" id="top-leds"></div>
-    <button id="feed-btn" title="打开/收起 UPLINK・MEMORY 侧栏">📡</button>
-    <button id="clear-btn" title="一键清除全部窗口显示（共享记忆与事件日志保留）">🧹</button>
-    <button id="settings-btn" title="设置">⚙</button>
+    <button id="feed-btn" title="Toggle UPLINK / MEMORY sidebar">📡</button>
+    <button id="clear-btn" title="Clear all window displays (shared memory & event log are kept)">🧹</button>
+    <button id="settings-btn" title="Settings">⚙</button>
     <div class="conn" id="conn"><span class="conn-dot"></span><span id="conn-text">LINK</span></div>
     <div class="clock" id="clock">--:--:--</div>
   </div>
@@ -33,18 +33,18 @@
     <div class="set-head"><span>⚙ SETTINGS</span><button id="set-close">✕</button></div>
     <div class="set-body">
       <div class="set-section">
-        <div class="set-title">AGENT 模型与参数</div>
-        <div class="set-hint">模型留空 = 用 agent 自己的默认；附加参数原样追加到 CLI 命令行</div>
+        <div class="set-title">AGENT MODELS & ARGS</div>
+        <div class="set-hint">Empty model = agent's own default; extra args are appended to the CLI as-is</div>
         <div id="set-agents"></div>
       </div>
       <div class="set-section">
-        <div class="set-title">SKIN · 皮肤</div>
+        <div class="set-title">SKIN · THEME</div>
         <div id="set-themes"></div>
       </div>
       <div class="set-section">
-        <div class="set-title">聚焦窗口透明度 <span id="op-val">70%</span></div>
+        <div class="set-title">FOCUS WINDOW OPACITY <span id="op-val">70%</span></div>
         <input type="range" id="set-opacity" min="30" max="100" step="5" value="70">
-        <div class="set-hint">单选某个 agent 时弹出的全窗口面板背景透明度（Ghostty 式：背景半透明、文字不透明）</div>
+        <div class="set-hint">Background opacity of the full-window panel when focusing a single agent (Ghostty style: translucent background, opaque text)</div>
       </div>
     </div>
     <div class="set-foot">
@@ -69,8 +69,8 @@
     <div id="feed"></div>
     <div id="mem-panel" hidden>
       <div class="mem-toolbar">
-        <input id="mem-q" placeholder="搜索记忆（相关度排序）…" spellcheck="false">
-        <button id="mem-mgr-btn" title="打开记忆管理页（查看/编辑全部记忆）">管理</button>
+        <input id="mem-q" placeholder="Search memories (ranked by relevance)…" spellcheck="false">
+        <button id="mem-mgr-btn" title="Open memory manager (view/edit all memories)">MANAGE</button>
       </div>
       <div id="mem-list"></div>
       <div class="mem-add">
@@ -80,8 +80,8 @@
           <option value="preference">preference</option>
           <option value="task">task</option>
         </select>
-        <input id="mem-text" placeholder="写入新记忆…" spellcheck="false">
-        <button id="mem-add-btn" title="写入共享记忆">＋</button>
+        <input id="mem-text" placeholder="Write a new memory…" spellcheck="false">
+        <button id="mem-add-btn" title="Add to shared memory">＋</button>
       </div>
     </div>
   </aside>
@@ -89,12 +89,12 @@
 
 <div id="memmgr-overlay" hidden>
   <div id="memmgr-panel">
-    <div class="set-head"><span>🧠 MEMORY MANAGER · 全部共享记忆</span><button id="mm-close">✕</button></div>
+    <div class="set-head"><span>🧠 MEMORY MANAGER · All Shared Memories</span><button id="mm-close">✕</button></div>
     <div class="mm-filter">
-      <button class="mm-chip active" data-f="all">全部</button>
-      <button class="mm-chip" data-f="active">生效中</button>
-      <button class="mm-chip" data-f="staged">待审批</button>
-      <button class="mm-chip" data-f="retired">已停用</button>
+      <button class="mm-chip active" data-f="all">All</button>
+      <button class="mm-chip" data-f="active">Active</button>
+      <button class="mm-chip" data-f="staged">Pending</button>
+      <button class="mm-chip" data-f="retired">Retired</button>
       <span class="mm-count" id="mm-count"></span>
     </div>
     <div id="mm-list"></div>
@@ -107,9 +107,9 @@
     <span class="prompt-sig" id="prompt-sig">⬡</span>
     <div class="input-col">
       <div id="pending-atts"></div>
-      <textarea id="cmd-input" rows="1" placeholder="广播到全部 agent；@agent名 定向；📎 或拖拽添加附件；Shift+Enter 发送…"></textarea>
+      <textarea id="cmd-input" rows="1" placeholder="Broadcast to all agents; @name to target one; 📎 or drop attachments; Shift+Enter to send…"></textarea>
     </div>
-    <button id="attach-btn" title="上传附件（文件/图片/音频/视频）">📎</button>
+    <button id="attach-btn" title="Upload attachment (file/image/audio/video)">📎</button>
     <input type="file" id="file-input" multiple hidden>
   </div>
   <button id="send-btn">SEND ⇧⏎</button>

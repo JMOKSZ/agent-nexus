@@ -32,9 +32,9 @@ export const dshAdapter = {
     } catch { /* down */ }
     return {
       text: [
-        'DEEPSEEK (DSH) 状态:',
-        '• 模式: headless 一次性（无会话连续性）',
-        `• 飞书链路 (dsh --profile lark): ${lark}`,
+        'DEEPSEEK (DSH) status:',
+        '• Mode: headless one-shot (no session continuity)',
+        `• Lark link (dsh --profile lark): ${lark}`,
         `• dsh web :3080: ${web}`,
       ].join('\n'),
     };

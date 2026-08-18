@@ -29,18 +29,18 @@ function buildDeck(agents) {
     term.id = `term-${id}`;
     term.style.setProperty('--ac', a.color);
     term.innerHTML = `
-      <div class="term-head" data-agent="${id}" title="点击设定为指挥目标">
+      <div class="term-head" data-agent="${id}" title="Click to set as command target">
         <span class="a-dot idle" id="dot-${id}"></span>
         <span class="a-name">${a.name}</span>
         <span class="a-desc">${a.desc}</span>
         <span class="a-meta">
           <span class="a-latency" id="lat-${id}"></span>
-          <button class="a-stop" id="stop-${id}" data-agent="${id}" title="停止当前任务并清空队列">⏹</button>
-          ${a.stateless ? '' : `<button class="a-reset" data-agent="${id}" title="清除该 agent 的会话上下文并清空窗口显示">RESET</button>`}
+          <button class="a-stop" id="stop-${id}" data-agent="${id}" title="Stop current task and clear the queue">⏹</button>
+          ${a.stateless ? '' : `<button class="a-reset" data-agent="${id}" title="Reset this agent's session context and clear the window">RESET</button>`}
         </span>
       </div>
       <div class="a-task" id="task-${id}"></div>
-      <div class="term-body${a.terminal ? ' xterm-host' : ''}" id="body-${id}">${a.terminal ? '' : '<div class="empty-hint">STANDBY — 等待指令</div>'}</div>`;
+      <div class="term-body${a.terminal ? ' xterm-host' : ''}" id="body-${id}">${a.terminal ? '' : '<div class="empty-hint">STANDBY — awaiting orders</div>'}</div>`;
     quad.appendChild(term);
   }
   for (const id of AGENT_ORDER) if (state.agents[id]?.terminal) initXterm(id);
@@ -168,7 +168,7 @@ const THEME_SW = {
   light: '#7ccfc0',
   dark: '#b8a9e8',
 };
-const THEME_LABEL = { cyber: 'CYBER', light: '明亮', dark: '暗黑' };
+const THEME_LABEL = { cyber: 'CYBER', light: 'LIGHT', dark: 'DARK' };
 
 function applyUI(ui) {
   document.body.dataset.theme = ui.theme === 'cyber' ? '' : ui.theme;
@@ -202,9 +202,9 @@ function buildSettings() {
     const rows = 3 + (s.fields?.[id]?.length || 0);
     return `<div class="set-agent" style="--ac:${a?.color || '#888'}">
       <span class="sa-name" style="grid-row: span ${rows}">${a?.name || id.toUpperCase()}</span>
-      <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${esc(a?.modelHint || '') || '模型（留空=默认）'}" spellcheck="false">
-      <input id="sa-${id}" value="${esc(cfg.extraArgs || '')}" placeholder='附加参数，如 --flag value（原样追加到 CLI）' spellcheck="false">
-      <input id="sc-${id}" type="number" min="0" max="4000" step="100" value="${cfg.ctxChars ?? ''}" placeholder="上下文预算字符数（0=关闭注入）" title="注入到该 agent prompt 的共享记忆/上下文预算（字符）">
+      <input id="sm-${id}" value="${esc(cfg.model || '')}" placeholder="${esc(a?.modelHint || '') || 'model (empty = default)'}" spellcheck="false">
+      <input id="sa-${id}" value="${esc(cfg.extraArgs || '')}" placeholder='extra args, e.g. --flag value (appended to CLI as-is)' spellcheck="false">
+      <input id="sc-${id}" type="number" min="0" max="4000" step="100" value="${cfg.ctxChars ?? ''}" placeholder="context budget in chars (0 = disable injection)" title="Shared-memory/context budget (chars) injected into this agent's prompt">
       ${extra}
     </div>`;
   }).join('');
@@ -241,7 +241,7 @@ $('#feed-btn').addEventListener('click', () => {
   $('#feed-btn').classList.toggle('on', p.classList.contains('open'));
 });
 $('#clear-btn').addEventListener('click', async () => {
-  if (!confirm('清除全部窗口的显示内容？\n共享记忆与事件日志（蒸馏源）不受影响。')) return;
+  if (!confirm('Clear all window displays?\nShared memory and the event log (distill source) are not affected.')) return;
   await fetch('/api/display/clear', { method: 'POST' });
 });
 const closeSettings = (revert) => {
@@ -274,7 +274,7 @@ $('#set-save').addEventListener('click', async () => {
   });
   state.settings = await res.json();
   applyUI(state.settings.ui);
-  $('#set-status').textContent = 'SAVED ✓（模型/参数对该 agent 的下一条消息生效）';
+  $('#set-status').textContent = "SAVED ✓ (model/args apply to this agent's next message)";
 });
 
 /* ── rendering ── */
@@ -383,19 +383,19 @@ async function loadMemories(q = $('#mem-q').value.trim()) {
     <div class="mem-item${stagedMode ? ' staged' : ''}">
       <div class="m-head">
         <span class="m-kind">${stagedMode ? '🧪 ' : ''}#${m.id} ${esc(m.kind)}</span>
-        <span class="m-src">${m.trust === 'user' ? '你' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
-        ${stagedMode ? `<button class="m-ok" data-id="${m.id}" title="批准生效">✓</button>` : ''}
-        <button class="m-x" data-id="${m.id}" title="停用（可溯源，不物理删除）">✕</button>
+        <span class="m-src">${m.trust === 'user' ? 'you' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
+        ${stagedMode ? `<button class="m-ok" data-id="${m.id}" title="Approve">✓</button>` : ''}
+        <button class="m-x" data-id="${m.id}" title="Retire (kept for audit, not deleted)">✕</button>
       </div>
       ${esc(m.text)}
     </div>`;
   let html = '';
   if (staged.length && !q) {
-    html += `<div class="mem-sec">待审批（蒸馏产物）</div>` + staged.map((m) => memItem(m, true)).join('');
+    html += `<div class="mem-sec">Pending approval (distilled)</div>` + staged.map((m) => memItem(m, true)).join('');
   }
   if (memories.length) html += memories.map((m) => memItem(m, false)).join('');
   if (!html) {
-    list.innerHTML = `<div class="mem-empty">${q ? '没有匹配的记忆' : '共享记忆为空<br>用 /remember 或下方输入框写入'}</div>`;
+    list.innerHTML = `<div class="mem-empty">${q ? 'No matching memories' : 'Shared memory is empty<br>Add one with /remember or the input below'}</div>`;
     return;
   }
   list.innerHTML = html;
@@ -507,7 +507,7 @@ function connect() {
     const clearBody = (id) => {
       if (state.agents[id]?.terminal) return; // live PTY content, not message history
       const b = termBody(id);
-      if (b) b.innerHTML = '<div class="empty-hint">STANDBY — 等待指令</div>';
+      if (b) b.innerHTML = '<div class="empty-hint">STANDBY — awaiting orders</div>';
     };
     if (agent) {
       clearBody(agent);
@@ -565,7 +565,7 @@ async function uploadFiles(files) {
       Object.assign(placeholder, meta, { uploading: false });
     } catch (err) {
       state.pending = state.pending.filter((p) => p !== placeholder);
-      alert(`上传失败: ${file.name} — ${err.message}`);
+      alert(`Upload failed: ${file.name} — ${err.message}`);
     }
     renderPending();
   }
@@ -624,8 +624,8 @@ function autoGrow() {
 const PHONE_MQ = matchMedia('(max-width: 700px)');
 const applyPlaceholder = () => {
   $('#cmd-input').placeholder = PHONE_MQ.matches
-    ? '广播到全部；@名 定向；📎 附件…'
-    : '广播到全部 agent；@agent名 定向；📎 或拖拽添加附件；Shift+Enter 发送…';
+    ? 'Broadcast to all; @name to target; 📎 attach…'
+    : 'Broadcast to all agents; @name to target; 📎 or drop attachments; Shift+Enter to send…';
 };
 PHONE_MQ.addEventListener('change', applyPlaceholder);
 applyPlaceholder();
@@ -656,25 +656,25 @@ async function loadMemMgr() {
   const res = await fetch('/api/memories/all');
   const { memories } = await res.json();
   const shown = mmFilter === 'all' ? memories : memories.filter((m) => m.status === mmFilter);
-  $('#mm-count').textContent = `${shown.length} / ${memories.length} 条`;
+  $('#mm-count').textContent = `${shown.length} / ${memories.length} items`;
   const list = $('#mm-list');
-  if (!shown.length) { list.innerHTML = '<div class="mm-empty">该分类下没有记忆</div>'; return; }
+  if (!shown.length) { list.innerHTML = '<div class="mm-empty">No memories in this category</div>'; return; }
   list.innerHTML = shown.map((m) => `
     <div class="mm-item ${m.status}" data-id="${m.id}">
       <div class="mm-head">
         <span class="mm-id">#${m.id}</span>
         <span class="mm-status ${m.status}">${m.status}</span>
-        <span>${m.trust === 'user' ? '你' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
+        <span>${m.trust === 'user' ? 'you' : esc(m.source || 'agent')} · ${fmtTime(m.ts)}</span>
         <select class="mm-kind-sel">
           ${['fact', 'decision', 'preference', 'task'].map((k) => `<option value="${k}"${k === m.kind ? ' selected' : ''}>${k}</option>`).join('')}
         </select>
       </div>
       <textarea class="mm-text" rows="2" spellcheck="false">${esc(m.text)}</textarea>
       <div class="mm-actions">
-        <button class="mm-btn save" data-act="save">保存修改</button>
-        ${m.status === 'staged' ? '<button class="mm-btn" data-act="approve">✓ 批准</button>' : ''}
-        ${m.status === 'retired' ? '<button class="mm-btn" data-act="restore">♻ 恢复</button>' : ''}
-        ${m.status !== 'retired' ? '<button class="mm-btn danger" data-act="retire">✕ 停用</button>' : ''}
+        <button class="mm-btn save" data-act="save">Save</button>
+        ${m.status === 'staged' ? '<button class="mm-btn" data-act="approve">✓ Approve</button>' : ''}
+        ${m.status === 'retired' ? '<button class="mm-btn" data-act="restore">♻ Restore</button>' : ''}
+        ${m.status !== 'retired' ? '<button class="mm-btn danger" data-act="retire">✕ Retire</button>' : ''}
       </div>
     </div>`).join('');
   list.querySelectorAll('.mm-item').forEach((item) => {

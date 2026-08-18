@@ -35,8 +35,8 @@ class TermSession {
     });
     this.pty.onExit(({ exitCode }) => {
       this.pty = null;
-      this.push(`\r\n\x1b[33m[进程已退出 (code ${exitCode}) — 发送任意输入将自动重启]\x1b[0m\r\n`);
-      for (const c of this.clients) this.safeSend(c, `\r\n\x1b[33m[进程已退出 (code ${exitCode}) — 发送任意输入将自动重启]\x1b[0m\r\n`);
+      this.push(`\r\n\x1b[33m[process exited (code ${exitCode}) — type anything to restart]\x1b[0m\r\n`);
+      for (const c of this.clients) this.safeSend(c, `\r\n\x1b[33m[process exited (code ${exitCode}) — type anything to restart]\x1b[0m\r\n`);
     });
   }
 

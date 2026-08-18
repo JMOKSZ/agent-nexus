@@ -25,16 +25,16 @@ export const openclawAdapter = {
   slashCommands: ['status'],
   settingFields: [
     {
-      key: 'thinking', label: '思考级别 (--thinking)',
+      key: 'thinking', label: 'Thinking level (--thinking)',
       options: [
-        { value: '', label: '默认' },
-        { value: 'off', label: 'off 关闭' },
+        { value: '', label: 'default' },
+        { value: 'off', label: 'off' },
         { value: 'minimal', label: 'minimal' },
         { value: 'low', label: 'low' },
         { value: 'medium', label: 'medium' },
         { value: 'high', label: 'high' },
         { value: 'xhigh', label: 'xhigh' },
-        { value: 'adaptive', label: 'adaptive 自适应' },
+        { value: 'adaptive', label: 'adaptive' },
         { value: 'max', label: 'max' },
       ],
     },
@@ -91,12 +91,12 @@ export const openclawAdapter = {
     const channels = Object.entries(cfg.channels || {}).filter(([, v]) => v?.enabled).map(([k]) => k);
     return {
       text: [
-        'OPENCLAW 状态:',
+        'OPENCLAW status:',
         `• gateway :${port}: ${gw}`,
-        `• 主模型: ${model}${fallbacks.length ? `（fallback: ${fallbacks.join(', ')}）` : ''}`,
-        `• 通道: ${channels.length ? channels.join(' + ') : '无'}`,
-        `• nexus 会话: ${currentSession ? String(currentSession) : '无（下条消息开启新会话）'}`,
-        `• nexus 思考级别: ${getAgentCfg('openclaw').thinking || '默认'}`,
+        `• Primary model: ${model}${fallbacks.length ? ` (fallback: ${fallbacks.join(', ')})` : ''}`,
+        `• Channels: ${channels.length ? channels.join(' + ') : 'none'}`,
+        `• nexus session: ${currentSession ? String(currentSession) : 'none (next message starts a new session)'}`,
+        `• nexus thinking level: ${getAgentCfg('openclaw').thinking || 'default'}`,
       ].join('\n'),
     };
   },

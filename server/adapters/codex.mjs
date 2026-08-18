@@ -88,19 +88,19 @@ const projectOf = (cwd) => (cwd ? basename(cwd) : '?');
 const LIVE_MS = 10 * 60 * 1000;
 const isLive = (s) => Date.now() - s.mtime < LIVE_MS;
 const listLine = (s) =>
-  `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)}${isLive(s) ? ' · ⚡活跃中' : ''} · ${s.snippet}`;
+  `• ${s.id.slice(0, 8)} · ${projectOf(s.cwd)} · ${fmtAge(s.mtime)}${isLive(s) ? ' · ⚡live' : ''} · ${s.snippet}`;
 
 export const codexAdapter = {
   id: 'codex',
   slashCommands: ['sessions', 'resume', 'fork', 'status'],
   settingFields: [
     {
-      key: 'sandbox', label: '沙箱模式 (-s)',
+      key: 'sandbox', label: 'Sandbox mode (-s)',
       options: [
-        { value: '', label: '默认（config.toml）' },
-        { value: 'read-only', label: 'read-only 只读' },
-        { value: 'workspace-write', label: 'workspace-write 工作区可写' },
-        { value: 'danger-full-access', label: 'danger-full-access 完全放行（危险）' },
+        { value: '', label: 'default (config.toml)' },
+        { value: 'read-only', label: 'read-only' },
+        { value: 'workspace-write', label: 'workspace-write' },
+        { value: 'danger-full-access', label: 'danger-full-access (unsafe)' },
       ],
     },
   ],
@@ -152,44 +152,44 @@ export const codexAdapter = {
       const cfg = getAgentCfg('codex');
       return {
         text: sid
-          ? `CODEX 状态:\n• 线程: ${String(sid).slice(0, 13)}…\n• 模型: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}\n• 沙箱: ${cfg.sandbox || '默认'}\n• 续接模式: exec resume 生效中\n• 清空: /clear · 分叉: /fork`
-          : `CODEX 状态:\n• 线程: 无（下条消息开启新线程）\n• 模型: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}`,
+          ? `CODEX status:\n• Thread: ${String(sid).slice(0, 13)}…\n• Model: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}\n• Sandbox: ${cfg.sandbox || 'default'}\n• Resume mode: exec resume active\n• Clear: /clear · Fork: /fork`
+          : `CODEX status:\n• Thread: none (next message starts a new thread)\n• Model: ${cfg.model || 'deepseek-v4-flash (DeepSeek API)'}`,
       };
     }
     if (cmd === 'fork') {
       const sid = typeof currentSession === 'string' ? currentSession : currentSession?.id;
-      if (!sid) return { text: '当前没有活动线程，无法分叉。先正常对话建立线程。' };
+      if (!sid) return { text: 'No active thread to fork. Chat normally first to establish a thread.' };
       return {
         session: { id: sid, fork: true },
-        text: `⑂ 下条消息将从线程 ${String(sid).slice(0, 8)} 分叉出新线程（原线程保持不变）。`,
+        text: `⑂ Next message will fork a new thread from ${String(sid).slice(0, 8)} (the original stays untouched).`,
       };
     }
     if (cmd === 'sessions') {
       const list = listSessions(10);
-      if (!list.length) return { text: '没有找到任何 codex 会话。' };
-      return { text: `最近的 codex 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${list.map(listLine).join('\n')}` };
+      if (!list.length) return { text: 'No codex sessions found.' };
+      return { text: `Recent codex sessions (⚡=written within 10 min, may be in use elsewhere):\n${list.map(listLine).join('\n')}` };
     }
     if (cmd === 'resume') {
       const all = listSessions(100);
-      if (!all.length) return { text: '没有找到任何 codex 会话。' };
+      if (!all.length) return { text: 'No codex sessions found.' };
       const arg = args.trim();
       if (!arg) {
         // No arg → show the picker list instead of guessing a session.
-        return { text: `最近的 codex 会话（⚡=10 分钟内有写入，可能正在别处使用）:\n${all.slice(0, 10).map(listLine).join('\n')}\n\n用 /resume <前缀> 恢复（以分叉方式接续，原会话不会被修改）。` };
+        return { text: `Recent codex sessions (⚡=written within 10 min, may be in use elsewhere):\n${all.slice(0, 10).map(listLine).join('\n')}\n\nUse /resume <prefix> to resume (continues as a fork — the original session is never modified).` };
       }
       let pick;
       {
         const matches = all.filter((s) => s.id.startsWith(arg));
-        if (matches.length === 0) return { text: `没有匹配 "${arg}" 的会话。用 /sessions 查看列表。` };
+        if (matches.length === 0) return { text: `No session matches "${arg}". Use /sessions to see the list.` };
         if (matches.length > 1) {
-          return { text: `"${arg}" 匹配到多个会话，请加长前缀:\n${matches.slice(0, 8).map(listLine).join('\n')}` };
+          return { text: `"${arg}" matches multiple sessions — use a longer prefix:\n${matches.slice(0, 8).map(listLine).join('\n')}` };
         }
         pick = matches[0];
       }
       // Always fork into a new thread so the original thread is never appended to.
       return {
         session: { id: pick.id, fork: true },
-        text: `✓ 已恢复 codex 线程 ${pick.id.slice(0, 8)}（项目 ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)}）\n"${pick.snippet}"\n后续消息将以分叉方式接续该线程上下文，原线程不会被修改。`,
+        text: `✓ Resumed codex thread ${pick.id.slice(0, 8)} (project ${projectOf(pick.cwd)} · ${fmtAge(pick.mtime)})\n"${pick.snippet}"\nNext messages continue this thread's context as a fork — the original thread is never modified.`,
       };
     }
     return null;

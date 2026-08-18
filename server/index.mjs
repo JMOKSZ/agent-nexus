@@ -124,7 +124,7 @@ const server = createServer(async (req, res) => {
       res.end('{"error":"empty text"}');
       return;
     }
-    hub.pushMessage({ from: 'system', to: 'user', text: `🧠 已记住 #${id}（${normalizeKind(body.kind)}）: ${String(body.text).slice(0, 120)}`, kind: 'memo' });
+    hub.pushMessage({ from: 'system', to: 'user', text: `🧠 remembered #${id} (${normalizeKind(body.kind)}): ${String(body.text).slice(0, 120)}`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ id }));
     return;
@@ -134,7 +134,7 @@ const server = createServer(async (req, res) => {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
     const ok = retireMemory(body.id);
-    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `记忆 #${body.id} 已停用`, kind: 'memo' });
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `memory #${body.id} retired`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok }));
     return;
@@ -144,7 +144,7 @@ const server = createServer(async (req, res) => {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
     const ok = approveMemory(body.id);
-    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `✓ 记忆 #${body.id} 已批准生效`, kind: 'memo' });
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `✓ memory #${body.id} approved`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok }));
     return;
@@ -160,7 +160,7 @@ const server = createServer(async (req, res) => {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
     const ok = updateMemory(body.id, { text: body.text, kind: body.kind });
-    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `✎ 记忆 #${body.id} 已手动修改`, kind: 'memo' });
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `✎ memory #${body.id} edited`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok }));
     return;
@@ -170,7 +170,7 @@ const server = createServer(async (req, res) => {
     let body;
     try { body = JSON.parse(await readBody(req)); } catch { body = {}; }
     const ok = restoreMemory(body.id);
-    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `♻ 记忆 #${body.id} 已恢复生效`, kind: 'memo' });
+    if (ok) hub.pushMessage({ from: 'system', to: 'user', text: `♻ memory #${body.id} restored`, kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok }));
     return;
@@ -206,7 +206,7 @@ const server = createServer(async (req, res) => {
     const buf = Buffer.from(String(body.data || ''), 'base64');
     if (!buf.length || buf.length > MAX_UPLOAD_BYTES) {
       res.writeHead(413, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: '文件为空或超过 50MB 限制' }));
+      res.end(JSON.stringify({ error: 'file is empty or exceeds the 50MB limit' }));
       return;
     }
     const id = randomBytes(6).toString('hex');
@@ -244,10 +244,10 @@ const server = createServer(async (req, res) => {
       hub.pushMessage({
         from: 'system', to: id, kind: 'error',
         text: stateless
-          ? `↺ ${name} 是无状态 agent（每条消息独立，无会话可清），窗口显示已清空`
+          ? `↺ ${name} is stateless (every message is independent, no session to clear); display cleared`
           : hadSession
-            ? `↺ ${name} 会话已重置，窗口显示已清空`
-            : `↺ ${name} 当前没有活动会话，窗口显示已清空`,
+            ? `↺ ${name} session reset; display cleared`
+            : `↺ ${name} has no active session; display cleared`,
       });
     }
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -257,7 +257,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/api/display/clear' && req.method === 'POST') {
     hub.clearDisplay();
-    hub.pushMessage({ from: 'system', to: 'user', text: '🧹 全部窗口显示已清空（共享记忆与事件日志保留，不受影响）', kind: 'memo' });
+    hub.pushMessage({ from: 'system', to: 'user', text: '🧹 All window displays cleared (shared memory & event log are kept)', kind: 'memo' });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end('{"ok":true}');
     return;

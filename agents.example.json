@@ -5,7 +5,7 @@
     "color": "#00f0ff",
     "desc": "Claude Code CLI",
     "adapter": "claude",
-    "modelHint": "claude-sonnet-4-6（留空=默认）",
+    "modelHint": "claude-sonnet-4-6 (empty = default)",
     "ctxChars": 900,
     "cwd": "~"
   },
@@ -15,7 +15,7 @@
     "color": "#ff2fd6",
     "desc": "Codex CLI",
     "adapter": "codex",
-    "modelHint": "deepseek-v4-flash（留空=默认）",
+    "modelHint": "deepseek-v4-flash (empty = default)",
     "ctxChars": 900
   },
   {
@@ -24,7 +24,7 @@
     "color": "#7cff4f",
     "desc": "DSH · headless harness",
     "adapter": "dsh",
-    "modelHint": "（dsh 无模型参数，仅附加参数生效）",
+    "modelHint": "(dsh has no model flag; only extra args apply)",
     "ctxChars": 1800
   },
   {
@@ -33,7 +33,7 @@
     "color": "#b78bff",
     "desc": "OpenClaw · local gateway",
     "adapter": "openclaw",
-    "modelHint": "zhipu/glm-5.2（留空=默认）",
+    "modelHint": "zhipu/glm-5.2 (empty = default)",
     "ctxChars": 700
   }
 ]

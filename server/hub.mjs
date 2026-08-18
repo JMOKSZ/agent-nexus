@@ -143,7 +143,7 @@ export class Hub {
     } else {
       this.stopped[agentId] = false;
       this.setStatus(agentId, { state: 'idle', task: null });
-      this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} 队列已清空（无运行中的任务）`, kind: 'error' });
+      this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} queue cleared (no running task)`, kind: 'error' });
     }
   }
 
@@ -200,7 +200,7 @@ export class Hub {
       if (this.stopped[agentId]) {
         this.stopped[agentId] = false;
         this.setStatus(agentId, { state: 'idle', task: null });
-        this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} 已被手动停止`, kind: 'error' });
+        this.pushMessage({ from: 'system', to: agentId, text: `⏹ ${this.agents[agentId].name} stopped manually`, kind: 'error' });
         return;
       }
       this.setStatus(agentId, { state: 'error', task: null, lastError: String(err.message || err) });
@@ -239,7 +239,7 @@ export class Hub {
       if (!m) continue;
       const id = addMemory({ kind: normalizeKind(m[1]), text: m[2], trust: 'agent', source: fromAgent });
       if (id != null) {
-        this.pushMessage({ from: 'system', to: 'user', text: `🧠 共享记忆 #${id}（${this.agents[fromAgent].name} · ${normalizeKind(m[1])}）: ${m[2].trim().slice(0, 120)}`, kind: 'memo' });
+        this.pushMessage({ from: 'system', to: 'user', text: `🧠 shared memory #${id} (${this.agents[fromAgent].name} · ${normalizeKind(m[1])}): ${m[2].trim().slice(0, 120)}`, kind: 'memo' });
       }
     }
   }
@@ -256,23 +256,23 @@ export class Hub {
       const km = args.match(/^(\w+)\s*[:：]\s*([\s\S]+)$/);
       const kind = km ? normalizeKind(km[1]) : 'fact';
       const text = km ? km[2].trim() : args;
-      if (!text) { say('用法: /remember [kind:] 内容 （kind = fact|decision|preference|task）'); return; }
+      if (!text) { say('Usage: /remember [kind:] content  (kind = fact|decision|preference|task)'); return; }
       const id = addMemory({ kind, text, trust: 'user', source: 'user' });
-      say(`🧠 已记住 #${id}（${kind}）: ${text.slice(0, 160)}`);
+      say(`🧠 remembered #${id} (${kind}): ${text.slice(0, 160)}`);
       return;
     }
     if (cmd === 'forget') {
       const id = Number(args);
-      if (!id) { say('用法: /forget <id>（id 见 /memories）'); return; }
-      say(retireMemory(id) ? `✓ 记忆 #${id} 已停用（可溯源，未物理删除）` : `记忆 #${id} 不存在或已停用`);
+      if (!id) { say('Usage: /forget <id>  (see /memories for ids)'); return; }
+      say(retireMemory(id) ? `✓ memory #${id} retired (kept for traceability, not deleted)` : `memory #${id} not found or already retired`);
       return;
     }
     if (cmd === 'memories') {
       const n = Number(args) || 15;
       const mems = listMemories(n);
-      if (!mems.length) { say('共享记忆为空。用 /remember 写入，或等 agent 用 MEMO: 行自行记录。'); return; }
-      const lines = mems.map((m) => `#${m.id} [${m.kind}${m.trust === 'user' ? ' · 你' : ` · ${m.source || 'agent'}`}] ${m.text}`);
-      say(`共享记忆（最新 ${mems.length} 条）:\n${lines.join('\n')}`);
+      if (!mems.length) { say('Shared memory is empty. Use /remember to add one, or wait for agents to record MEMO: lines themselves.'); return; }
+      const lines = mems.map((m) => `#${m.id} [${m.kind}${m.trust === 'user' ? ' · you' : ` · ${m.source || 'agent'}`}] ${m.text}`);
+      say(`Shared memory (latest ${mems.length}):\n${lines.join('\n')}`);
       return;
     }
     if (cmd === 'distill') {
@@ -281,7 +281,7 @@ export class Hub {
     }
     if (cmd === 'clearall') {
       this.clearDisplay();
-      say('🧹 全部窗口显示已清空（共享记忆与事件日志保留，不受影响）');
+      say('🧹 All window displays cleared (shared memory & event log are kept)');
       return;
     }
   }
@@ -294,13 +294,13 @@ export class Hub {
     const did = this.distillerId;
     const adapter = this.adapters[did];
     const say = (text) => this.pushMessage({ from: 'system', to: 'user', text, kind: 'memo' });
-    if (!adapter) { say('蒸馏器不可用（agents 配置里没有可运行的 agent）。'); return; }
+    if (!adapter) { say('Distiller unavailable (no runnable agent in the agents config).'); return; }
     const watermark = Number(getMeta('last_distill_event_id') || 0);
     const evs = eventsSince(watermark);
-    if (!evs.length) { say('没有新事件需要蒸馏。'); return; }
+    if (!evs.length) { say('No new events to distill.'); return; }
     const prev = this.queues[did] || Promise.resolve();
     const job = prev.then(async () => {
-      this.setStatus(did, { state: 'running', task: '🧪 蒸馏共享记忆…' });
+      this.setStatus(did, { state: 'running', task: '🧪 distilling shared memory…' });
       try {
         const { text } = await adapter.run({
           text: DISTILL_PROMPT + evs.map((e) => e.line).join('\n'),
@@ -319,16 +319,16 @@ export class Hub {
         setMeta('last_distill_event_id', evs[evs.length - 1].id);
         this.setStatus(did, { state: 'idle', task: null });
         say(count
-          ? `🧪 蒸馏完成：${count} 条候选记忆进入待审批区（MEMORY 面板里 ✓ 批准 / ✕ 停用）`
-          : '🧪 蒸馏完成：这段日志没有提炼出新的长期记忆。');
+          ? `🧪 distillation done: ${count} candidate memories moved to the pending area (✓ approve / ✕ retire in the MEMORY panel)`
+          : '🧪 distillation done: no new long-term memories found in this log segment.');
       } catch (err) {
         delete this.procs[did];
         this.setStatus(did, { state: 'idle', task: null });
-        say(`⚠ 蒸馏失败: ${err.message || err}`);
+        say(`⚠ distillation failed: ${err.message || err}`);
       }
     });
     this.queues[did] = job.catch(() => {});
-    say(`🧪 蒸馏作业已排队：${evs.length} 条新事件，由 ${this.agents[did].name} 提炼…`);
+    say(`🧪 distillation job queued: ${evs.length} new events, to be distilled by ${this.agents[did].name}…`);
     return job;
   }
 
@@ -341,7 +341,7 @@ export class Hub {
       text = m[2].trim();
     }
     if (!text && !attachments.length) return;
-    if (!text) text = '(见附件)';
+    if (!text) text = '(see attachment)';
     this.pushMessage({ from: 'user', to, text, kind: 'user', attachments: attachments.length ? attachments : undefined });
     if (text.startsWith('/')) {
       const cmdName = text.slice(1).split(/\s/, 1)[0].toLowerCase();
@@ -350,7 +350,7 @@ export class Hub {
         return;
       }
       if (to === 'broadcast') {
-        this.pushMessage({ from: 'system', to: 'user', text: '斜杠命令需要定向到具体 agent，例如 @claude /sessions', kind: 'error' });
+        this.pushMessage({ from: 'system', to: 'user', text: 'Slash commands must target a specific agent, e.g. @claude /sessions', kind: 'error' });
         return;
       }
       // Terminal agents run a real interactive CLI — type the command
@@ -388,7 +388,7 @@ export class Hub {
     if (['clear', 'new', 'reset'].includes(cmd)) {
       delete this.sessions[agentId];
       this.save();
-      reply(`✓ ${name} 会话已清空，下条消息开启新会话。`);
+      reply(`✓ ${name} session cleared — next message starts a new session.`);
       return;
     }
     const adapter = this.adapters[agentId];
@@ -405,12 +405,12 @@ export class Hub {
           return;
         }
       } catch (err) {
-        reply(`⚠ 命令执行失败: ${err.message || err}`);
+        reply(`⚠ command failed: ${err.message || err}`);
         return;
       }
     }
     const cmds = adapter.slashCommands ? [...adapter.slashCommands, 'clear', 'stop'] : ['clear', 'stop'];
-    reply(`${name} 不支持 /${cmd}。该 agent 可用命令: ${[...new Set(cmds)].map((c) => '/' + c).join(' ')}`);
+    reply(`${name} does not support /${cmd}. Available commands: ${[...new Set(cmds)].map((c) => '/' + c).join(' ')}`);
   }
 
   snapshot() {
