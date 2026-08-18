@@ -304,6 +304,9 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 .term-body.xterm-host { padding: 2px 4px; overflow: hidden; }
 .term-body.xterm-host .xterm { height: 100%; }
 .term-body.xterm-host .xterm-viewport { scrollbar-width: thin; }
+/* xterm.css paints the viewport solid #000 — let the .term panel gradient show through */
+.term-body.xterm-host .xterm .xterm-viewport,
+.term-body.xterm-host .xterm .xterm-screen { background-color: transparent; }
 
 /* ── tablet / iPad (≤1100px): terminals stack vertically, feed becomes a drawer ── */
 #feed-btn { display: none; }

@@ -68,6 +68,12 @@ function buildDeck(agents) {
 /* ── embedded real terminals (agents with terminal:true) ── */
 const xterms = {}; // id -> { term, fit, ws }
 
+// Terminal text follows the deck's --text so light theme stays readable;
+// background stays transparent so the .term panel gradient shows through.
+function xtermFg() {
+  return getComputedStyle(document.body).getPropertyValue('--text').trim() || '#dbe7ff';
+}
+
 function doFit(id) {
   const x = xterms[id];
   if (!x) return;
@@ -92,9 +98,10 @@ function initXterm(id) {
     fontSize: 12,
     cursorBlink: true,
     scrollback: 5000,
+    allowTransparency: true,
     theme: {
       background: '#00000000',
-      foreground: '#dbe7ff',
+      foreground: xtermFg(),
       cursor: accent,
       selectionBackground: '#3b4a6b88',
     },
@@ -177,6 +184,8 @@ function applyUI(ui) {
   $('#set-opacity').value = Math.round(ui.focusOpacity * 100);
   document.querySelectorAll('.swatch').forEach((s) =>
     s.classList.toggle('active', s.dataset.theme === ui.theme));
+  const fg = xtermFg();
+  for (const id in xterms) xterms[id].term.options.theme = { ...xterms[id].term.options.theme, foreground: fg };
 }
 
 function currentUiDraft() {
