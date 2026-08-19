@@ -126,8 +126,14 @@ export const codexAdapter = {
         ? ['exec', 'resume', '--json', '--skip-git-repo-check', sid, prompt]
         : ['exec', '--json', '--skip-git-repo-check', prompt];
     const cfg = getAgentCfg('codex');
-    if (cfg.model) args.push('-m', cfg.model);
-    if (cfg.sandbox) args.push('-s', cfg.sandbox);
+    if (sid) {
+      // `exec resume`/`exec fork` reject -m/-s; config overrides work on both
+      if (cfg.model) args.push('-c', `model="${cfg.model}"`);
+      if (cfg.sandbox) args.push('-c', `sandbox_mode="${cfg.sandbox}"`);
+    } else {
+      if (cfg.model) args.push('-m', cfg.model);
+      if (cfg.sandbox) args.push('-s', cfg.sandbox);
+    }
     args.push(...splitArgs(cfg.extraArgs));
     // images are real vision input, not just path references
     for (const img of images) args.push('--image', img.path);

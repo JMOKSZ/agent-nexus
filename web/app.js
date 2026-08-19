@@ -11,6 +11,14 @@ const state = {
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Linkify already-escaped text: after esc() there are no raw <>"' left, so
+// matching [^\s]+ is XSS-safe; trailing punctuation/entities are excluded.
+const linkify = (s) => s.replace(/https?:\/\/[^\s]+/g, (m) => {
+  const t = m.match(/(&quot;|&#39;|[).,;:!?\]"'])+$/);
+  const url = t ? m.slice(0, -t[0].length) : m;
+  const trail = t ? t[0] : '';
+  return `<a class="lnk" href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>${trail}`;
+});
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
 
 /* ── build terminals ── */
@@ -108,6 +116,7 @@ function initXterm(id) {
   });
   const fit = new FitAddon.FitAddon();
   term.loadAddon(fit);
+  if (typeof WebLinksAddon !== 'undefined') term.loadAddon(new WebLinksAddon.WebLinksAddon());
   term.open(host);
   xterms[id] = { term, fit, ws: null };
 
@@ -254,6 +263,43 @@ $('#clear-btn').addEventListener('click', async () => {
   if (!confirm('Clear all window displays?\nShared memory and the event log (distill source) are not affected.')) return;
   await fetch('/api/display/clear', { method: 'POST' });
 });
+
+/* ── completion notifications ── */
+// Browser Notification for agent task completion. Toggle persisted in
+// localStorage; fires only when the deck is hidden/unfocused. Terminal-mode
+// agents (real PTYs) never emit reply events, so only headless agents notify.
+let notifOn = localStorage.getItem('nexusNotify') === '1';
+const notifSupported = 'Notification' in window;
+function syncNotifBtn() {
+  const b = $('#notif-btn');
+  const live = notifOn && notifSupported && Notification.permission === 'granted';
+  b.classList.toggle('on', live);
+  b.title = !notifSupported ? 'Notifications not supported in this browser'
+    : Notification.permission === 'denied' ? 'Notifications blocked by the browser (check site settings)'
+    : `Notify when an agent finishes (${live ? 'on' : 'off'})`;
+}
+$('#notif-btn').addEventListener('click', async () => {
+  if (!notifSupported) return;
+  if (!notifOn) {
+    if (Notification.permission === 'default') await Notification.requestPermission();
+    notifOn = Notification.permission === 'granted';
+  } else {
+    notifOn = false;
+  }
+  localStorage.setItem('nexusNotify', notifOn ? '1' : '0');
+  syncNotifBtn();
+});
+function maybeNotify(msg) {
+  if (!notifOn || !notifSupported || Notification.permission !== 'granted') return;
+  if (msg.kind !== 'reply' && msg.kind !== 'error') return;
+  if (!document.hidden && document.hasFocus()) return; // you're already looking at it
+  const a = state.agents[msg.from];
+  const title = a ? `${a.name} ✓ task done` : '⚠ NEXUS system';
+  const meta = msg.latencyMs ? ` (${(msg.latencyMs / 1000).toFixed(1)}s)` : '';
+  const n = new Notification(title + meta, { body: msg.text.replace(/\s+/g, ' ').slice(0, 140) });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+syncNotifBtn();
 const closeSettings = (revert) => {
   $('#settings-overlay').hidden = true;
   if (revert && state.settings) applyUI(state.settings.ui); // discard live preview
@@ -342,7 +388,7 @@ function msgHtml(msg) {
   if (msg.latencyMs) meta += ` · ${(msg.latencyMs / 1000).toFixed(1)}s`;
   if (msg.usage?.costUsd != null) meta += ` · $${msg.usage.costUsd.toFixed(4)}`;
   if (msg.usage?.model) meta += ` · ${msg.usage.model.split('/').pop()}`;
-  return `<div class="msg ${cls}" style="--ac:${color}"><span class="m-tag">${esc(tag)}</span>${esc(msg.text)}${attHtml(msg.attachments)}<span class="m-meta">${meta}</span></div>`;
+  return `<div class="msg ${cls}" style="--ac:${color}"><span class="m-tag">${esc(tag)}</span>${linkify(esc(msg.text))}${attHtml(msg.attachments)}<span class="m-meta">${meta}</span></div>`;
 }
 
 function renderMsg(msg) {
@@ -363,7 +409,7 @@ function addFeed(msg) {
   const preview = msg.text.length > 140 ? msg.text.slice(0, 140) + '…' : msg.text;
   const attMark = msg.attachments?.length ? ` 📎×${msg.attachments.length}` : '';
   feed.insertAdjacentHTML('afterbegin',
-    `<div class="f-item ${msg.kind}"><b style="color:${color}">${esc(name)}</b>${toName ? ` → ${esc(toName)}` : ''}${attMark}: ${esc(preview)}<span class="f-time">${fmtTime(msg.ts)}</span></div>`);
+    `<div class="f-item ${msg.kind}"><b style="color:${color}">${esc(name)}</b>${toName ? ` → ${esc(toName)}` : ''}${attMark}: ${linkify(esc(preview))}<span class="f-time">${fmtTime(msg.ts)}</span></div>`);
   while (feed.children.length > 120) feed.lastChild.remove();
   $('#feed-count').textContent = ++state.feedCount;
   if (msg.kind === 'memo') loadMemories(); // shared memory changed
@@ -529,7 +575,7 @@ function connect() {
     for (const m of snap.messages) renderMsg(m);
     setConn(true);
   });
-  es.addEventListener('msg', (e) => renderMsg(JSON.parse(e.data)));
+  es.addEventListener('msg', (e) => { const m = JSON.parse(e.data); renderMsg(m); maybeNotify(m); });
   es.addEventListener('display-clear', (e) => {
     const { agent } = JSON.parse(e.data);
     const clearBody = (id) => {
