@@ -16,7 +16,11 @@ import { termManager } from './terminal.mjs';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.NEXUS_PORT || 7700);
-const HOST = '127.0.0.1';
+const HOST = process.env.NEXUS_HOST || '127.0.0.1';
+// Per-install PWA icon theme — e.g. set NEXUS_ICON_THEME=light on one machine
+// so its home-screen icon is distinguishable from another machine's dark one.
+const ICON_THEME = process.env.NEXUS_ICON_THEME === 'light' ? 'light' : 'dark';
+const LIGHT_ICON = { bg: '#f4f7fb' };
 const WEB_DIR = join(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 const MANIFEST_PATH = join(UPLOAD_DIR, 'manifest.json');
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -331,8 +335,27 @@ const server = createServer(async (req, res) => {
     return;
   }
 
-  // Static files
+  // Static files (light PWA variant swaps manifest colors + icon assets)
+  if (ICON_THEME === 'light' && url.pathname === '/manifest.webmanifest') {
+    const m = JSON.parse(readFileSync(join(WEB_DIR, 'manifest.webmanifest'), 'utf8'));
+    m.icons = m.icons.map((i) => ({ ...i, src: i.src.replace('/icons/', '/icons/light/') }));
+    m.background_color = LIGHT_ICON.bg;
+    m.theme_color = LIGHT_ICON.bg;
+    res.writeHead(200, { 'Content-Type': MIME['.webmanifest'] });
+    res.end(JSON.stringify(m));
+    return;
+  }
   let file = url.pathname === '/' ? 'index.html' : url.pathname.slice(1);
+  if (ICON_THEME === 'light') {
+    if (url.pathname === '/icons/apple-touch-icon.png') {
+      file = 'icons/light/apple-touch-icon.png';
+    } else if (file === 'index.html') {
+      const raw = readFileSync(join(WEB_DIR, 'index.html'), 'utf8');
+      res.writeHead(200, { 'Content-Type': MIME['.html'] });
+      res.end(raw.replaceAll('#22233a', LIGHT_ICON.bg));
+      return;
+    }
+  }
   file = join(WEB_DIR, file);
   if (!file.startsWith(WEB_DIR) || !existsSync(file) || !statSync(file).isFile()) {
     res.writeHead(404).end('not found');

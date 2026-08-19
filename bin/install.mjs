@@ -219,7 +219,9 @@ if (platform() !== 'darwin') {
     .replaceAll('__HOME__', HOME)
     .replace('/opt/homebrew/opt/node/bin/node', nodeBin)
     .replace(join(HOME, 'Projects/agent-nexus/server/index.mjs'), join(ROOT, 'server', 'index.mjs'))
-    .replaceAll('__DEEPSEEK_API_KEY__', process.env.DEEPSEEK_API_KEY || '');
+    .replaceAll('__DEEPSEEK_API_KEY__', process.env.DEEPSEEK_API_KEY || '')
+    .replaceAll('__NEXUS_HOST__', process.env.NEXUS_HOST || '127.0.0.1')
+    .replaceAll('__NEXUS_ICON_THEME__', process.env.NEXUS_ICON_THEME || '');
   const plistPath = join(HOME, 'Library', 'LaunchAgents', 'com.agent-nexus.plist');
   writeFileSync(plistPath, plist);
   ok(`wrote ${plistPath}`);

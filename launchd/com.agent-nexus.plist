@@ -17,6 +17,10 @@
     <string>__HOME__</string>
     <key>DEEPSEEK_API_KEY</key>
     <string>__DEEPSEEK_API_KEY__</string>
+    <key>NEXUS_HOST</key>
+    <string>__NEXUS_HOST__</string>
+    <key>NEXUS_ICON_THEME</key>
+    <string>__NEXUS_ICON_THEME__</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

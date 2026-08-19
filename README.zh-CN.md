@@ -163,6 +163,12 @@ agent 之间互相调度有三种方式：
 
 服务**只绑定 `127.0.0.1`，没有任何鉴权**——请勿用反向代理或端口转发把它暴露到局域网或公网。OpenClaw 适配器不会向 Telegram 等外部通道投递消息；DSH 适配器使用独立的 headless profile，不影响其他 profile。
 
+### Tailscale / 局域网访问
+
+默认只绑定 `127.0.0.1`。需要从 Tailscale 网络内的其他设备（如 iPad / iPhone）访问时，在 launchd plist 或启动环境里设置 `NEXUS_HOST=0.0.0.0`（或具体的 Tailscale IP，如 `100.x.y.z`），然后从设备打开 `http://<Tailscale IP>:7700`。注意 deck 没有鉴权，绑定 `0.0.0.0` 后同网段设备都能访问。
+
+多台机器区分 PWA 图标：设 `NEXUS_ICON_THEME=light` 会使用浅色底图标（清单与 apple-touch-icon 同步切换），默认深色。
+
 ## 目录结构
 
 ```

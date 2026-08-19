@@ -163,6 +163,12 @@ Terminal agents (e.g. a live Claude Code TUI) receive tasks as typed input — t
 
 The server binds to **127.0.0.1 only and has no authentication**. Do not expose it through a reverse proxy or port forward. The OpenClaw adapter never delivers to Telegram or any external channel; the DSH adapter uses an isolated headless profile.
 
+### Tailscale / LAN access
+
+By default the deck binds `127.0.0.1` only. To reach it from other devices on your Tailscale network (iPad / iPhone), set `NEXUS_HOST=0.0.0.0` (or a specific Tailscale IP like `100.x.y.z`) in the launchd plist / startup environment, then open `http://<tailscale-ip>:7700` from the device. Note the deck has no auth — binding `0.0.0.0` also exposes it to your LAN subnet.
+
+To tell machines apart on a home screen, set `NEXUS_ICON_THEME=light` for a light-background PWA icon (manifest + apple-touch-icon switch together); the default stays dark.
+
 ## Project structure
 
 ```
