@@ -12,9 +12,11 @@
   <key>EnvironmentVariables</key>
   <dict>
     <key>PATH</key>
-    <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <string>__HOME__/.local/bin:__HOME__/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
     <key>HOME</key>
     <string>__HOME__</string>
+    <key>DEEPSEEK_API_KEY</key>
+    <string>__DEEPSEEK_API_KEY__</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>

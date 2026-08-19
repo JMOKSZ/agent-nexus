@@ -1,12 +1,20 @@
-import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readdirSync, statSync, openSync, readSync, closeSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, basename } from 'node:path';
 import { runCli, attachmentNote, WORKDIR } from '../runner.mjs';
 import { getAgentCfg, splitArgs } from '../settings.mjs';
 
-// Codex: use the CLI bundled inside Codex.app (0.148) — the homebrew 0.136 CLI
-// cannot parse the app's models.json. Session continuity via `exec resume <threadId>`.
-const CODEX_BIN = '/Applications/Codex.app/Contents/Resources/codex';
+// Codex: prefer the CLI bundled inside Codex.app, then ChatGPT.app, then PATH.
+// The homebrew CLI cannot parse the app's models.json, so never silently
+// settle for it if an app-bundled binary exists.
+const CODEX_CANDIDATES = [
+  process.env.CODEX_BIN,
+  '/Applications/Codex.app/Contents/Resources/codex',
+  '/Applications/ChatGPT.app/Contents/Resources/codex',
+].filter(Boolean);
+const CODEX_BIN = CODEX_CANDIDATES.find((p) => {
+  try { return existsSync(p); } catch { return false; }
+}) || 'codex';
 const SESSIONS_DIR = join(homedir(), '.codex', 'sessions');
 
 function readHead(file, bytes = 262144) {

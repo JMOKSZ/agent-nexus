@@ -1,5 +1,5 @@
 import { execFileSync, execFile } from 'node:child_process';
-import { readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync, existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { homedir } from 'node:os';
 import { runCli, stripAnsi, attachmentNote } from '../runner.mjs';
@@ -15,6 +15,16 @@ import { getAgentCfg, splitArgs } from '../settings.mjs';
 
 const SESSIONS_ROOT = join(homedir(), '.dsh', 'sessions');
 const POLL_MS = 800;
+
+// dsh is usually installed via npm's global bin (e.g. ~/.npm-global/bin) which
+// may be missing from a launchd service PATH — resolve it explicitly.
+const DSH_BIN = (() => {
+  const candidates = [process.env.DSH_BIN, join(homedir(), '.npm-global', 'bin', 'dsh')].filter(Boolean);
+  for (const p of candidates) {
+    try { if (existsSync(p)) return p; } catch { /* keep looking */ }
+  }
+  return 'dsh';
+})();
 
 function findSessionFile(afterMs) {
   let best = null;
@@ -145,15 +155,16 @@ export const dshAdapter = {
   stateless: true, // no session continuity — hub prepends shared context each run
   streamIsProcess: true, // live deltas are CoT, not the reply — hub keeps them as a collapsed block
   slashCommands: ['status'],
-  async run({ text, attachments = [], onDelta, onSpawn = () => {} }) {
+  async run({ text, attachments = [], onDelta, onSpawn = () => {}, workdir }) {
     const prompt = text + (attachments.length ? attachmentNote(attachments) : '');
     const cfg = getAgentCfg('dsh');
     const started = Date.now();
     let done = false;
     const tail = streamSessionLog(started, () => done, onDelta);
     try {
-      const { code, stdout, stderr } = await runCli('dsh', ['--profile', 'headless', prompt, ...splitArgs(cfg.extraArgs)], {
+      const { code, stdout, stderr } = await runCli(DSH_BIN, ['--profile', 'headless', prompt, ...splitArgs(cfg.extraArgs)], {
         timeoutMs: 600_000,
+        cwd: workdir || homedir(),
         onSpawn,
       });
       const clean = stripAnsi(stdout).trim();
