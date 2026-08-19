@@ -63,6 +63,7 @@ body {
 }
 .ibtn.primary:hover { background: color-mix(in srgb, var(--brand) 24%, transparent); box-shadow: 0 0 18px color-mix(in srgb, var(--brand) 40%, transparent); }
 .ibtn.ok { border-color: var(--ok); color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.ibtn.on { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 10px color-mix(in srgb, var(--brand) 30%, transparent); }
 .ibtn.ok:hover { border-color: var(--ok); color: var(--ok); box-shadow: 0 0 10px color-mix(in srgb, var(--ok) 40%, transparent); }
 
 /* ── topbar ── */
@@ -166,6 +167,8 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 @keyframes slidein { from { opacity: 0; transform: translateY(6px); } }
 .msg .m-tag { display: block; font-size: 9.5px; letter-spacing: 1.5px; margin-bottom: 3px; opacity: .75; }
 .msg .m-meta { display: block; font-size: 9.5px; margin-top: 4px; opacity: .55; }
+.lnk { color: var(--brand); text-decoration: underline; text-underline-offset: 2px; text-decoration-color: color-mix(in srgb, var(--brand) 55%, transparent); word-break: break-all; }
+.lnk:hover { text-decoration-color: var(--brand); filter: brightness(1.15); }
 .msg.user { align-self: flex-end; background: color-mix(in srgb, var(--user) 12%, transparent); border: 1px solid color-mix(in srgb, var(--user) 35%, transparent); color: color-mix(in srgb, var(--user) 55%, var(--text)); }
 .msg.user .m-tag { color: var(--user); }
 .msg.agent { align-self: flex-start; background: color-mix(in srgb, var(--ac) 7%, transparent); border: 1px solid color-mix(in srgb, var(--ac) 26%, transparent); }
