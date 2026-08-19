@@ -86,6 +86,7 @@ const CATALOG = [
   {
     id: 'claude', name: 'CLAUDE', color: '#00f0ff', desc: 'Claude Code CLI',
     adapter: 'claude', modelHint: 'claude-sonnet-4-6 (empty = default)', ctxChars: 900, cwd: '~',
+    terminal: true,
     detect: () => which('claude'),
   },
   {
