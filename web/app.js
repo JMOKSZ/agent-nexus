@@ -467,10 +467,28 @@ function delta({ agent, text }) {
   scrollDown(agent);
 }
 
-function deltaEnd({ agent }) {
+function deltaEnd({ agent, keep }) {
   const l = state.live[agent];
   if (l) {
-    l.el.closest('.msg').remove();
+    const msgEl = l.el.closest('.msg');
+    const text = l.el.textContent || '';
+    if (keep && text.trim()) {
+      // process transcript (e.g. dsh CoT): freeze as a collapsed block
+      // instead of dropping it when the final reply lands
+      const det = document.createElement('details');
+      det.className = 'process-log';
+      const sum = document.createElement('summary');
+      sum.textContent = `💭 思考过程（${text.length} 字）`;
+      const pre = document.createElement('pre');
+      pre.textContent = text;
+      det.appendChild(sum);
+      det.appendChild(pre);
+      l.el.replaceWith(det);
+      msgEl.classList.remove('live');
+      msgEl.classList.add('process');
+    } else {
+      msgEl.remove();
+    }
     delete state.live[agent];
   }
 }

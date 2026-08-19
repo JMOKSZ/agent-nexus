@@ -181,7 +181,7 @@ export class Hub {
         this.save();
       }
       delete this.procs[agentId];
-      this.emit('delta-end', { agent: agentId, deltaId });
+      this.emit('delta-end', { agent: agentId, deltaId, keep: !!adapter.streamIsProcess });
       const latency = Date.now() - started;
       this.setStatus(agentId, { state: 'idle', task: null, lastLatencyMs: latency });
       const replyText = result.text || streamed || '(empty reply)';
