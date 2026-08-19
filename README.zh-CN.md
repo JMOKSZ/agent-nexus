@@ -13,7 +13,8 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 ## 功能
 
 - **Agent 矩阵** — 每个 agent 一个实时窗口，带状态灯、延迟、停止/重置按钮；阵容就是一个由你掌控的 JSON 文件（1 个到多个均可）
-- **真终端模式** — 标记 `terminal: true` 的 agent 通过 node-pty + xterm.js 嵌入完整交互式 TUI（比如一个可以直接打字操作的完整 Claude Code 会话）
+- **真终端模式** — 标记 `terminal: true` 的 agent 通过 node-pty + xterm.js 嵌入完整交互式 TUI（比如一个可以直接打字操作的完整 Claude Code 会话）；支持显式 `cmd`/`args`（如 `openclaw tui`）
+- **实时过程流** — 无头 adapter 也能流式输出工作过程（不只是最终回复）：dsh adapter 跟踪 session 日志，实时渲染 CoT transcript（推理 + 工具调用），回复落地后冻结为可折叠块
 - **广播与定向** — 默认发送给全部 agent；`@claude review this diff` 定向发送；底部 chip 一键切换目标
 - **Agent 互调** — agent 在回复里写独立行 `@<agent>: <任务>` 即可调度另一个 agent，也可用 `nexus ask` CLI 或 `POST /api/agent/ask`（深度上限 4，防循环）
 - **共享记忆** — `node:sqlite` 事件溯源存储；`/remember`、agent 回复里的 `MEMO[kind]:` 行自动入库、按相关度召回注入 prompt、`/distill` 蒸馏候选记忆 + 审批流、完整的管理界面
@@ -113,6 +114,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | `ctxChars` | | 共享记忆注入预算字符数（0 = 关闭，默认 900） |
 | `cwd` | | agent 进程的工作目录 |
 | `terminal` | | 嵌入真实交互式 TUI，而不是无头单次运行 |
+| `cmd` / `args` | | 仅终端模式：要启动的命令/参数（默认用 agent id + 设置面板的 `--model`/`extraArgs`）。显式 `args` 会取代 `--model` 约定——例如 `["tui", "--session", "nexus"]` 对应 `openclaw tui` |
 | `distiller` | | 指定该 agent 执行 `/distill` 蒸馏（默认选第一个无会话 adapter） |
 
 - 想少放几个：删掉对应数组项即可。想加同类型第二个实例：加一个不同 `id` 的条目。

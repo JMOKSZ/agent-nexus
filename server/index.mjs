@@ -39,8 +39,10 @@ const hub = new Hub(adapters, agentsList);
 // Terminal agents run as persistent interactive PTYs (real CLI, not headless).
 termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
   const cfg = getAgentCfg(a.id);
-  const args = [];
-  if (cfg.model) args.push('--model', cfg.model);
+  // Explicit args in agents.json win (e.g. `openclaw tui` takes no --model);
+  // otherwise fall back to the generic --model + extraArgs convention.
+  const args = a.args ? [...a.args] : [];
+  if (!a.args && cfg.model) args.push('--model', cfg.model);
   args.push(...splitArgs(cfg.extraArgs));
   return { id: a.id, cmd: a.cmd || a.id, args, cwd: a.cwd };
 }));

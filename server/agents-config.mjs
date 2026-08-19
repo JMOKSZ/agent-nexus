@@ -43,6 +43,7 @@ export function loadAgentsConfig() {
       cwd: parseCwd(a.cwd),
       terminal: a.terminal === true, // run as a persistent interactive PTY instead of headless one-shot
       cmd: typeof a.cmd === 'string' && /^[\w./+-]{1,80}$/.test(a.cmd) ? a.cmd : undefined,
+      args: Array.isArray(a.args) ? a.args.filter((s) => typeof s === 'string' && /^[\w./+:=@-]{1,80}$/.test(s)).slice(0, 16) : undefined,
       ctxChars: Number.isFinite(Number(a.ctxChars)) ? Math.min(4000, Math.max(0, Math.round(Number(a.ctxChars)))) : undefined,
     });
   }

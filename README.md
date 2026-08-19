@@ -13,7 +13,8 @@ English | [中文](README.zh-CN.md)
 ## Features
 
 - **Agent matrix** — every agent gets a live window with status LED, latency, stop/reset controls; the roster is just a JSON file you control (1 agent or many)
-- **Real terminal mode** — agents marked `terminal: true` embed a real interactive TUI via node-pty + xterm.js (e.g. a full Claude Code session you can also type into directly)
+- **Real terminal mode** — agents marked `terminal: true` embed a real interactive TUI via node-pty + xterm.js (e.g. a full Claude Code session you can also type into directly); explicit `cmd`/`args` supported (e.g. `openclaw tui`)
+- **Live process streaming** — headless adapters can stream their working (not just the final reply): the dsh adapter tails the session log and renders a live CoT transcript (reasoning + tool calls), frozen into a collapsible block when the reply lands
 - **Broadcast & targeting** — send to everyone, or `@claude review this diff` to one; bottom chips make targeting one tap
 - **Agent-to-agent dispatch** — an agent can task another by writing `@<agent>: <task>` on its own line, via the `nexus ask` CLI, or `POST /api/agent/ask` (depth-capped to prevent loops)
 - **Shared memory** — event-sourced `node:sqlite` store; `/remember`, `MEMO[kind]:` capture from agent replies, relevance-based recall injected into prompts, `/distill` staged candidates with an approval flow, full management UI
@@ -113,6 +114,7 @@ Day-to-day control: `bin/nexus start | stop | restart | logs` — logs live at `
 | `ctxChars` | | Shared-memory injection budget (0 = off, default 900) |
 | `cwd` | | Working directory for the agent process |
 | `terminal` | | Embed a real interactive TUI instead of headless runs |
+| `cmd` / `args` | | Terminal mode only: command/args to spawn (default: agent id + `--model`/`extraArgs` from Settings). Explicit `args` replace the `--model` convention — e.g. `["tui", "--session", "nexus"]` for `openclaw tui` |
 | `distiller` | | This agent runs `/distill` jobs (default: first non-session adapter) |
 
 - Fewer agents: delete entries. More of the same type: add an entry with a new `id`.
