@@ -104,6 +104,11 @@ const CATALOG = [
     adapter: 'openclaw', modelHint: 'zhipu/glm-5.2 (empty = default)', ctxChars: 700,
     detect: () => which('openclaw'),
   },
+  {
+    id: 'hermes', name: 'HERMES', color: '#ffd166', desc: 'Hermes Agent CLI',
+    adapter: 'hermes', modelHint: '(empty = default model)', ctxChars: 900, cwd: '~',
+    detect: () => which('hermes'),
+  },
 ];
 const PALETTE = ['#00f0ff', '#ff2fd6', '#7cff4f', '#b78bff', '#ffd166', '#ff8c42', '#6ea8ff', '#f472b6'];
 const ID_RE = /^[a-z0-9][a-z0-9_-]*$/;

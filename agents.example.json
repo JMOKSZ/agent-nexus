@@ -36,5 +36,15 @@
     "adapter": "openclaw",
     "modelHint": "zhipu/glm-5.2 (empty = default)",
     "ctxChars": 700
+  },
+  {
+    "id": "hermes",
+    "name": "HERMES",
+    "color": "#ffd166",
+    "desc": "Hermes Agent CLI",
+    "adapter": "hermes",
+    "modelHint": "(empty = default model)",
+    "ctxChars": 900,
+    "cwd": "~"
   }
 ]

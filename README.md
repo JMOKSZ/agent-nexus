@@ -2,7 +2,7 @@
 
 **One browser tab to command your whole team of local CLI agents.**
 
-NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, Codex, DeepSeek Harness, OpenClaw, or your own — behind a single cyberpunk WebUI: broadcast or @-target instructions, watch every agent in its own live window, let agents dispatch each other, and share a collective memory across the team.
+NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, Codex, DeepSeek Harness, OpenClaw, Hermes, or your own — behind a single cyberpunk WebUI: broadcast or @-target instructions, watch every agent in its own live window, let agents dispatch each other, and share a collective memory across the team.
 
 ![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
 
@@ -36,6 +36,7 @@ English | [中文](README.zh-CN.md)
 | Codex | `codex` | Also auto-detected inside Codex.app |
 | DeepSeek Harness | `dsh` | Needs the built-in `headless` profile |
 | OpenClaw | `openclaw` | Called through the local gateway `agent` subcommand; **never touches external IM channels** |
+| Hermes | `hermes` | Third-party CLI agent; deck sessions are tagged `--source tool` so they stay out of your own session list |
 
 ## Quick start
 
@@ -108,7 +109,7 @@ Day-to-day control: `bin/nexus start | stop | restart | logs` — logs live at `
 | `id` | ✓ | Unique, lowercase `[a-z0-9-_]` — used for @-targeting and dispatch |
 | `name` | ✓ | Window title |
 | `color` | ✓ | Accent color (hex) |
-| `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` |
+| `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` \| `hermes` |
 | `desc` | | Subtitle |
 | `modelHint` | | Placeholder for the model field in Settings |
 | `ctxChars` | | Shared-memory injection budget (0 = off, default 900) |
@@ -136,7 +137,7 @@ Everything else — per-agent model & extra CLI args, theme, focus opacity — i
 | Attach files | 📎 button, drag & drop, or paste |
 
 Slash commands — hub-level (work anywhere): `/remember` `/forget` `/memories` `/distill` `/clearall`.
-Agent-level (prefix with `@agent`): claude & codex support `/sessions` `/resume <prefix>` `/fork` `/status` `/clear` `/stop`; dsh & openclaw support `/status` `/clear` `/stop`. In terminal windows, slash commands are typed straight into the TUI.
+Agent-level (prefix with `@agent`): claude & codex support `/sessions` `/resume <prefix>` `/fork` `/status` `/clear` `/stop`; dsh & openclaw support `/status` `/clear` `/stop`; hermes supports `/sessions` `/resume <prefix>` `/status` `/clear` `/stop`. In terminal windows, slash commands are typed straight into the TUI.
 
 ## Agent-to-agent dispatch
 
@@ -174,7 +175,7 @@ server/
   memory.mjs           # shared memory (node:sqlite, event-sourced)
   runner.mjs           # CLI spawn wrapper (timeout / line callbacks)
   settings.mjs         # settings persistence
-  adapters/            # claude / codex / dsh / openclaw + registry
+  adapters/            # claude / codex / dsh / openclaw / hermes + registry
 web/                   # zero-build vanilla JS + hand-written CSS, PWA
 bin/install.mjs        # interactive installer
 bin/nexus              # service control + agent dispatch CLI
