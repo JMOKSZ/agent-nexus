@@ -2,7 +2,7 @@
 
 **一个浏览器标签页，指挥你整支本地 CLI agent 小队。**
 
-NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code、Codex、DeepSeek Harness、OpenClaw 或你自己的——统一塞进一个赛博风 WebUI。广播或 @ 定向指令、每个 agent 独立的实时窗口、agent 之间互相调度、全队共享记忆，一应俱全。
+NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code、Codex、DeepSeek Harness、OpenClaw、Hermes 或你自己的——统一塞进一个赛博风 WebUI。广播或 @ 定向指令、每个 agent 独立的实时窗口、agent 之间互相调度、全队共享记忆，一应俱全。
 
 ![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
 
@@ -36,6 +36,7 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 | Codex | `codex` | 也会自动探测 Codex.app 内置 CLI |
 | DeepSeek Harness | `dsh` | 需要内建 `headless` profile |
 | OpenClaw | `openclaw` | 通过本地 gateway 的 `agent` 子命令调用；**不会触碰任何外部 IM 通道** |
+| Hermes | `hermes` | 第三方 CLI agent；deck 会话用 `--source tool` 标记，不混入你自己的会话列表 |
 
 ## 快速开始
 
@@ -108,7 +109,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | `id` | ✓ | 唯一，小写 `[a-z0-9-_]`——@ 定向和调度都用它 |
 | `name` | ✓ | 窗口标题 |
 | `color` | ✓ | 主题色（hex） |
-| `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` |
+| `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` \| `hermes` |
 | `desc` | | 副标题 |
 | `modelHint` | | 设置面板里模型输入框的提示语 |
 | `ctxChars` | | 共享记忆注入预算字符数（0 = 关闭，默认 900） |
@@ -136,7 +137,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | 附件 | 📎 按钮 / 拖拽 / 粘贴 |
 
 斜杠命令——hub 层（随处可用）：`/remember` `/forget` `/memories` `/distill` `/clearall`。
-agent 层（需 `@agent` 前缀）：claude 与 codex 支持 `/sessions` `/resume <前缀>` `/fork` `/status` `/clear` `/stop`；dsh 与 openclaw 支持 `/status` `/clear` `/stop`。真终端窗口里斜杠命令会直接打进 TUI。
+agent 层（需 `@agent` 前缀）：claude 与 codex 支持 `/sessions` `/resume <前缀>` `/fork` `/status` `/clear` `/stop`；dsh 与 openclaw 支持 `/status` `/clear` `/stop`；hermes 支持 `/sessions` `/resume <前缀>` `/status` `/clear` `/stop`。真终端窗口里斜杠命令会直接打进 TUI。
 
 ## Agent 互调
 
@@ -180,7 +181,7 @@ server/
   memory.mjs           # 共享记忆（node:sqlite，事件溯源）
   runner.mjs           # CLI spawn 封装（超时/逐行回调）
   settings.mjs         # 设置持久化
-  adapters/            # claude / codex / dsh / openclaw 适配器 + 注册表
+  adapters/            # claude / codex / dsh / openclaw / hermes 适配器 + 注册表
 web/                   # 零构建 vanilla JS + 手写 CSS，PWA
 bin/install.mjs        # 交互式安装程序
 bin/nexus              # 服务控制 + agent 调度 CLI
