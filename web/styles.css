@@ -322,8 +322,18 @@ details.process-log pre { margin: 6px 0 0; max-height: 320px; overflow-y: auto; 
 .term-body.xterm-host .xterm .xterm-viewport,
 .term-body.xterm-host .xterm .xterm-screen { background-color: transparent; }
 
+/* ── feed panel toggle (all viewports) ── */
+#feed-btn.on { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 10px color-mix(in srgb, var(--brand) 30%, transparent); }
+
+/* ── desktop (>1100px): feed panel collapses in-flow so terminals take the space ── */
+@media (min-width: 1101px) {
+  #feed-panel { transition: width .25s ease, opacity .2s ease, margin-left .25s ease, border-width .25s ease; }
+  #feed-panel.closed {
+    width: 0; opacity: 0; margin-left: -12px; border-width: 0; pointer-events: none;
+  }
+}
+
 /* ── tablet / iPad (≤1100px): terminals stack vertically, feed becomes a drawer ── */
-#feed-btn { display: none; }
 @media (max-width: 1100px) {
   #deck { flex-direction: column; overflow-y: auto; }
   #quad {
@@ -339,8 +349,6 @@ details.process-log pre { margin: 6px 0 0; max-height: 320px; overflow-y: auto; 
     transform: translateX(102%); transition: transform .25s ease;
   }
   #feed-panel.open { transform: translateX(0); }
-  #feed-btn { display: inline-flex; }
-  #feed-btn.on { border-color: var(--brand); color: var(--brand); box-shadow: 0 0 10px color-mix(in srgb, var(--brand) 30%, transparent); }
   .term.focused { top: 52px; left: 8px; right: 8px; bottom: 8px; }
   #settings-panel, #memmgr-panel { width: 94vw; max-height: 90vh; }
 }

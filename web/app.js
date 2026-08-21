@@ -388,10 +388,27 @@ $('#settings-btn').addEventListener('click', () => {
   $('#set-status').textContent = '';
   $('#settings-overlay').hidden = false;
 });
+/* ── feed panel toggle ── */
+// Mobile/tablet (≤1100px): the panel is an overlay drawer — hidden by default,
+// .open slides it in. Desktop: the panel sits in-flow — visible by default,
+// .closed collapses it so the terminals take the space. Desktop state persists.
+const feedDrawerMQ = matchMedia('(max-width: 1100px)');
+const feedPanelEl = $('#feed-panel');
+try {
+  if (localStorage.getItem('nexus.feed') === 'closed') feedPanelEl.classList.add('closed');
+} catch { /* storage unavailable */ }
+const feedVisible = () => feedDrawerMQ.matches
+  ? feedPanelEl.classList.contains('open')
+  : !feedPanelEl.classList.contains('closed');
+$('#feed-btn').classList.toggle('on', feedVisible());
 $('#feed-btn').addEventListener('click', () => {
-  const p = $('#feed-panel');
-  p.classList.toggle('open');
-  $('#feed-btn').classList.toggle('on', p.classList.contains('open'));
+  if (feedDrawerMQ.matches) {
+    feedPanelEl.classList.toggle('open');
+  } else {
+    feedPanelEl.classList.toggle('closed');
+    try { localStorage.setItem('nexus.feed', feedPanelEl.classList.contains('closed') ? 'closed' : 'open'); } catch { /* non-fatal */ }
+  }
+  $('#feed-btn').classList.toggle('on', feedVisible());
 });
 $('#clear-btn').addEventListener('click', async () => {
   if (!confirm('Clear all window displays?\nShared memory and the event log (distill source) are not affected.')) return;
