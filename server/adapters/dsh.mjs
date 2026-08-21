@@ -1,60 +1,60 @@
-import { execFileSync, execFile } from 'node:child_process';
-import { readdirSync, statSync, existsSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import WebSocket from 'ws';
 import { homedir } from 'node:os';
-import { runCli, stripAnsi, attachmentNote } from '../runner.mjs';
-import { getAgentCfg, splitArgs } from '../settings.mjs';
+import { attachmentNote } from '../runner.mjs';
 
-// DeepSeek Harness headless profile: one-shot per message, plain-text answer on stdout.
-// Does NOT touch the separate `dsh --profile lark` process (Feishu link stays intact).
+// DeepSeek Harness via `dsh web`: this adapter talks to the running browser
+// surface (127.0.0.1:3080) over its RPC + events.mux protocol instead of
+// spawning `dsh --profile headless` one-shots. The web GUI session is the
+// conversation: messages sent from NEXUS appear in the dsh web browser UI,
+// and the model's live CoT is streamed back through the mux event stream.
 //
-// Streaming: the headless runner only prints the final message, but every turn is
-// persisted to ~/.dsh/sessions/<cwd-slug>/session-*/session.jsonl.zstd as it happens.
-// We poll that log (zstd frames are flushed per write, so zstdcat reads partial files)
-// and push a growing CoT transcript via onDelta — reasoning blocks, tool calls, text.
+// dsh web itself is kept running by launchd (com.agent-nexus.dsh-web) — no
+// manual terminal needed.
 
-const SESSIONS_ROOT = join(homedir(), '.dsh', 'sessions');
-const POLL_MS = 800;
+const WEB_BASE = process.env.DSH_WEB_URL || 'http://127.0.0.1:3080';
+const WS_URL = `${WEB_BASE.replace(/^http/, 'ws')}/api/events.mux`;
+const TIMEOUT_MS = 600_000;
+const POLL_MS = 700;
 
-// dsh is usually installed via npm's global bin (e.g. ~/.npm-global/bin) which
-// may be missing from a launchd service PATH — resolve it explicitly.
-const DSH_BIN = (() => {
-  const candidates = [process.env.DSH_BIN, join(homedir(), '.npm-global', 'bin', 'dsh')].filter(Boolean);
-  for (const p of candidates) {
-    try { if (existsSync(p)) return p; } catch { /* keep looking */ }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function rpc(method, payload, rpcId = crypto.randomUUID()) {
+  const res = await fetch(`${WEB_BASE}/api/${method}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      type: 'client-request',
+      rpcId,
+      method,
+      payload,
+    }),
+  });
+  if (!res.ok) throw new Error(`dsh web RPC ${method} → HTTP ${res.status}`);
+  const body = await res.json();
+  if (!body.result?.ok) {
+    const err = body.result?.error || {};
+    const e = new Error(`${method} failed: ${err.code || 'error'}: ${err.message || ''}`);
+    e.code = err.code;
+    e.details = err.details;
+    throw e;
   }
-  return 'dsh';
-})();
-
-function findSessionFile(afterMs) {
-  let best = null;
-  let dirs = [];
-  try { dirs = readdirSync(SESSIONS_ROOT); } catch { return null; }
-  for (const cwdSlug of dirs) {
-    const parent = join(SESSIONS_ROOT, cwdSlug);
-    let sessions = [];
-    try { sessions = readdirSync(parent); } catch { continue; }
-    for (const s of sessions) {
-      if (!s.startsWith('session-')) continue;
-      const f = join(parent, s, 'session.jsonl.zstd');
-      try {
-        const st = statSync(join(parent, s));
-        if (st.birthtimeMs >= afterMs - 2000 && (!best || st.birthtimeMs > best.birth)) {
-          best = { file: f, birth: st.birthtimeMs };
-        }
-      } catch { /* gone */ }
-    }
-  }
-  return best?.file || null;
+  return body.result.value;
 }
 
-function zstdcat(file) {
-  return new Promise((resolve) => {
-    execFile('zstdcat', [file], { maxBuffer: 64 * 1024 * 1024 }, (err, stdout) => {
-      // truncated tail frame sets err — stdout still holds all complete frames
-      resolve(stdout || '');
-    });
-  });
+async function ensureSession(sessionId, workdir) {
+  if (sessionId) {
+    try {
+      await rpc('session.history', { sessionId, maxMessages: 1 });
+      return sessionId;
+    } catch (err) {
+      if (err.code !== 'session-not-found') throw err;
+    }
+  }
+  const created = await rpc('session.create', { cwd: workdir || homedir() });
+  try {
+    await rpc('session.rename', { sessionId: created.sessionId, title: 'NEXUS · DSH' });
+  } catch { /* non-fatal */ }
+  return created.sessionId;
 }
 
 function shortArgs(name, argsJson) {
@@ -67,22 +67,18 @@ function shortArgs(name, argsJson) {
   }
 }
 
-function renderTranscript(jsonl) {
-  // Rebuild the live transcript from the full event log each poll (idempotent).
-  // Blocks keyed by turn:step:index; block-end / assistant/message carry the
-  // authoritative full text, *-delta and compacted *-chunks lines carry pieces.
-  const blocks = new Map(); // key -> { kind: 'reasoning'|'text', text, order }
-  const tools = new Map();  // callId -> line
+// Rebuild the live transcript from a (possibly partial) session event list.
+// Idempotent: same blocks/tools keyed by turn:step:index / callId.
+function renderTranscript(events) {
+  const blocks = new Map();
+  const tools = new Map();
   let order = 0;
   const blockAt = (turn, step, index, kind) => {
     const key = `${turn}:${step}:${index}`;
     if (!blocks.has(key)) blocks.set(key, { kind, text: '', order: order++ });
     return blocks.get(key);
   };
-  for (const line of jsonl.split('\n')) {
-    if (!line.trim().startsWith('{')) continue;
-    let ev;
-    try { ev = JSON.parse(line); } catch { continue; }
+  for (const ev of events) {
     const d = ev.data || {};
     if (ev.type === 'assistant/chunk') {
       const c = d.chunk || {};
@@ -105,7 +101,6 @@ function renderTranscript(jsonl) {
         }
       });
     } else if (ev.type === 'reasoning-chunks' || ev.type === 'text-chunks') {
-      // compacted delta batch: { turn, step, index, texts: [...] }
       const kind = ev.type === 'reasoning-chunks' ? 'reasoning' : 'text';
       blockAt(d.turn, d.step, d.index, kind).text += (d.texts || []).join('');
     }
@@ -119,80 +114,174 @@ function renderTranscript(jsonl) {
   return lines.join('\n\n');
 }
 
-async function streamSessionLog(afterMs, isDone, onDelta) {
-  const state = { file: null, lastLen: 0 };
-  const pollOnce = async () => {
-    const out = await zstdcat(state.file);
-    if (out.length > state.lastLen + 16) {
-      state.lastLen = out.length;
-      const text = renderTranscript(out);
-      if (text) onDelta(text);
-    }
+function finalReply(events) {
+  let text = '';
+  for (const ev of events) {
+    if (ev.type !== 'assistant/message') continue;
+    const content = ev.data?.message?.content || [];
+    const t = content
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n')
+      .trim();
+    if (t) text = t;
+  }
+  return text;
+}
+
+async function runPrompt({ sessionId, text, onDelta }) {
+  const promptRpcId = crypto.randomUUID();
+  const seenSeqs = new Set();
+  const events = [];
+  let started = false;
+  let startTurn = null;
+  let runError = null;
+  let pendingQuestions = [];
+  let settled = false;
+  let resolveDone;
+  const done = new Promise((r) => { resolveDone = r; });
+  const settle = (reason) => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    resolveDone(reason);
   };
-  // the session dir appears a moment after spawn — wait for it
-  for (let i = 0; i < 60 && !isDone(); i++) {
-    state.file = findSessionFile(afterMs);
-    if (state.file) break;
-    await new Promise((r) => setTimeout(r, 500));
+  const timer = setTimeout(() => settle('timeout'), TIMEOUT_MS);
+
+  const ingest = (ev) => {
+    if (!ev || typeof ev.seq !== 'number' || seenSeqs.has(ev.seq)) return;
+    seenSeqs.add(ev.seq);
+    events.push(ev);
+    events.sort((a, b) => a.seq - b.seq);
+    for (const e of events) {
+      const d = e.data || {};
+      if (!started && e.type === 'user/message' && d.source?.rpcId === promptRpcId) {
+        started = true;
+        startTurn = d.turn ?? null;
+      }
+      if (started && e.type === 'turn/end' && (startTurn === null || d.turn === startTurn)) settle('done');
+      if (e.type === 'turn/end' && d.reason?.kind === 'error' && !runError) {
+        runError = d.reason.error?.message || d.reason.failure?.message || 'turn failed';
+      }
+    }
+    const rendered = renderTranscript(events);
+    if (rendered) onDelta(rendered);
+  };
+
+  // Live stream (best effort — history polling below covers gaps).
+  let ws = null;
+  try {
+    ws = new WebSocket(WS_URL);
+    await new Promise((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error('ws open timeout')), 3000);
+      ws.once('open', () => { clearTimeout(t); resolve(); });
+      ws.once('error', (e) => { clearTimeout(t); reject(e); });
+    });
+    ws.on('message', (raw) => {
+      try {
+        const p = JSON.parse(String(raw)).payload;
+        if (!p || p.sessionId !== sessionId) return;
+        if (p.type === 'session/event') ingest(p.event);
+        else if (p.type === 'host/agent-error' && !runError) runError = p.message;
+        else if (p.type === 'question/requested') {
+          pendingQuestions.push(...(p.questions || []).map((q) => q.question || '').filter(Boolean));
+        }
+      } catch { /* malformed frame */ }
+    });
+  } catch {
+    try { ws?.close(); } catch { /* already closed */ }
+    ws = null;
   }
-  if (!state.file) {
-    // task may have finished before the session dir was discovered — the
-    // end-of-run flush guarantees the file exists now, so retry discovery once
-    return async () => {
-      state.file = findSessionFile(afterMs);
-      if (state.file) await pollOnce();
-    };
+
+  const startedAt = Date.now();
+  try {
+    // mode "queue" appends behind whatever the GUI session is already doing.
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        await rpc('session.prompt', {
+          sessionId,
+          mode: 'queue',
+          content: [{ type: 'text', text }],
+        }, promptRpcId);
+        break;
+      } catch (err) {
+        if (err.code !== 'agent-busy' || attempt === 9) throw err;
+        await sleep(1000);
+      }
+    }
+  } catch (err) {
+    try { ws?.close(); } catch { /* already closed */ }
+    throw err;
   }
-  while (!isDone()) {
-    await pollOnce();
-    await new Promise((r) => setTimeout(r, POLL_MS));
+
+  while (!settled && Date.now() - startedAt < TIMEOUT_MS) {
+    await Promise.race([done, sleep(POLL_MS)]);
+    if (settled) break;
+    try {
+      const hist = await rpc('session.history', { sessionId, maxMessages: 100 });
+      for (const h of hist.events || []) ingest(h.event);
+    } catch { /* transient */ }
   }
-  return pollOnce; // one final read after the process exits (end-of-run flush)
+  try { ws?.close(); } catch { /* already closed */ }
+
+  let reply = finalReply(events) || renderTranscript(events) || '';
+  if (!reply && runError) reply = `⚠ 任务出错：${runError}`;
+  if (!reply) reply = '(empty reply)';
+  let note = '';
+  if (settled === 'timeout') {
+    note = '\n\n⚠ 任务超时未完成';
+    if (pendingQuestions.length) {
+      note += `，模型正在 dsh web 界面等你回答：${pendingQuestions.join(' / ')}`;
+    }
+  }
+  return { text: reply + note, session: sessionId, usage: null };
 }
 
 export const dshAdapter = {
   id: 'dsh',
-  stateless: true, // no session continuity — hub prepends shared context each run
-  streamIsProcess: true, // live deltas are CoT, not the reply — hub keeps them as a collapsed block
+  // The web session keeps its own history; NEXUS still prepends shared context
+  // each run and treats every message as a standalone dispatch.
+  stateless: true,
+  streamIsProcess: true, // live deltas are CoT, not the reply — hub keeps them collapsed
   slashCommands: ['status'],
-  async run({ text, attachments = [], onDelta, onSpawn = () => {}, workdir }) {
-    const prompt = text + (attachments.length ? attachmentNote(attachments) : '');
-    const cfg = getAgentCfg('dsh');
-    const started = Date.now();
-    let done = false;
-    const tail = streamSessionLog(started, () => done, onDelta);
+
+  async run({ text, session, attachments = [], onDelta = () => {}, workdir }) {
     try {
-      const { code, stdout, stderr } = await runCli(DSH_BIN, ['--profile', 'headless', prompt, ...splitArgs(cfg.extraArgs)], {
-        timeoutMs: 600_000,
-        cwd: workdir || homedir(),
-        onSpawn,
-      });
-      const clean = stripAnsi(stdout).trim();
-      if (code !== 0 && !clean) throw new Error(`dsh exited ${code}: ${stripAnsi(stderr).slice(-300)}`);
-      return { text: clean, session: null, usage: null };
-    } finally {
-      done = true;
-      const finalPoll = await tail;
-      if (finalPoll) await finalPoll(); // catch events flushed right before exit
+      await rpc('session.list', {});
+    } catch (err) {
+      throw new Error(
+        `dsh web 未运行（${WEB_BASE}）：${err.message}。` +
+        '请确认后台服务已启动：launchctl list | grep dsh-web（或运行 dsh web --host 127.0.0.1 --port 3080）。',
+      );
     }
+    const prompt = text + (attachments.length ? attachmentNote(attachments) : '');
+    const sessionId = await ensureSession(session, workdir);
+    return runPrompt({ sessionId, text: prompt, onDelta });
   },
 
-  async handleCommand(cmd) {
+  async handleCommand(cmd, args, session) {
     if (cmd !== 'status') return null;
-    let lark = 'not running';
-    try { execFileSync('pgrep', ['-f', 'dsh --profile lark'], { stdio: 'pipe' }); lark = 'running ✓'; } catch { /* down */ }
     let web = 'DOWN';
+    let detail = 'not reachable';
+    let state = '?';
     try {
-      const r = await fetch('http://127.0.0.1:3080/', { signal: AbortSignal.timeout(2000) });
-      if (r.ok) web = 'LIVE';
-    } catch { /* down */ }
+      const list = await rpc('session.list', {});
+      web = 'LIVE';
+      detail = `${list.items.length} sessions`;
+      if (session) {
+        const row = list.items.find((x) => x.sessionId === session);
+        state = row ? (row.running ? 'running' : 'idle') : 'not found';
+      }
+    } catch (err) {
+      detail = err.message;
+    }
     return {
       text: [
-        'DEEPSEEK (DSH) status:',
-        '• Mode: headless one-shot (no session continuity)',
-        '• Streaming: live CoT via session log tail',
-        `• Lark link (dsh --profile lark): ${lark}`,
-        `• dsh web :3080: ${web}`,
+        'DEEPSEEK (DSH · web) status:',
+        `• dsh web :3080: ${web} (${detail})`,
+        `• Session: ${session || 'none'}`,
+        `• State: ${state}`,
+        '• Mode: persistent dsh web session (no headless one-shot)',
       ].join('\n'),
     };
   },

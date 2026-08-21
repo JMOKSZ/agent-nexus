@@ -14,7 +14,7 @@ English | [中文](README.zh-CN.md)
 
 - **Agent matrix** — every agent gets a live window with status LED, latency, stop/reset controls; the roster is just a JSON file you control (1 agent or many)
 - **Real terminal mode** — agents marked `terminal: true` embed a real interactive TUI via node-pty + xterm.js (e.g. a full Claude Code session you can also type into directly); explicit `cmd`/`args` supported (e.g. `openclaw tui`)
-- **Live process streaming** — headless adapters can stream their working (not just the final reply): the dsh adapter tails the session log and renders a live CoT transcript (reasoning + tool calls), frozen into a collapsible block when the reply lands
+- **Live process streaming** — adapters can stream their working (not just the final reply): the dsh adapter listens to the running `dsh web` event stream and renders a live CoT transcript (reasoning + tool calls), frozen into a collapsible block when the reply lands
 - **Broadcast & targeting** — send to everyone, or `@claude review this diff` to one; bottom chips make targeting one tap
 - **Agent-to-agent dispatch** — an agent can task another by writing `@<agent>: <task>` on its own line, via the `nexus ask` CLI, or `POST /api/agent/ask` (depth-capped to prevent loops)
 - **Shared memory** — event-sourced `node:sqlite` store; `/remember`, `MEMO[kind]:` capture from agent replies, relevance-based recall injected into prompts, `/distill` staged candidates with an approval flow, full management UI
@@ -34,7 +34,7 @@ English | [中文](README.zh-CN.md)
 |---|---|---|
 | Claude Code | `claude` | Official CLI; works with cc-switch channel switching |
 | Codex | `codex` | Also auto-detected inside Codex.app |
-| DeepSeek Harness | `dsh` | Needs the built-in `headless` profile |
+| DeepSeek Harness | `dsh` | Talks to the local `dsh web` surface (launchd service `com.agent-nexus.dsh-web`) |
 | OpenClaw | `openclaw` | Called through the local gateway `agent` subcommand; **never touches external IM channels** |
 | Hermes | `hermes` | Third-party CLI agent; deck sessions are tagged `--source tool` so they stay out of your own session list |
 
@@ -162,11 +162,17 @@ Terminal agents (e.g. a live Claude Code TUI) receive tasks as typed input — t
 
 ## Security
 
-The server binds to **127.0.0.1 only and has no authentication**. Do not expose it through a reverse proxy or port forward. The OpenClaw adapter never delivers to Telegram or any external channel; the DSH adapter uses an isolated headless profile.
+The server binds to **127.0.0.1 only and has no authentication**. Do not expose it through a reverse proxy or port forward. The OpenClaw adapter never delivers to Telegram or any external channel; the DSH adapter drives the local `dsh web` surface (127.0.0.1:3080) and never touches the separate `dsh --profile lark` process.
 
 ### Tailscale / LAN access
 
-By default the deck binds `127.0.0.1` only. To reach it from other devices on your Tailscale network (iPad / iPhone), set `NEXUS_HOST=0.0.0.0` (or a specific Tailscale IP like `100.x.y.z`) in the launchd plist / startup environment, then open `http://<tailscale-ip>:7700` from the device. Note the deck has no auth — binding `0.0.0.0` also exposes it to your LAN subnet.
+The recommended way to reach the deck from other devices on your Tailscale network (iPad / iPhone) is Tailscale Serve, which gives you a valid HTTPS URL (no browser "Not secure" warning):
+
+    tailscale serve --bg 7700
+
+Then open **`https://<machine>.<tailnet>.ts.net/`** from the device. The server can stay bound to `127.0.0.1` (default), since Tailscale Serve proxies to the local port.
+
+Alternative: set `NEXUS_HOST=0.0.0.0` (or a specific Tailscale IP like `100.x.y.z`) in the launchd plist / startup environment and open `http://<tailscale-ip>:7700` from the device. Note the deck has no auth and this is plain HTTP — binding `0.0.0.0` also exposes it to your LAN subnet, so prefer the HTTPS Serve route above.
 
 To tell machines apart on a home screen, set `NEXUS_ICON_THEME=light` for a light-background PWA icon (manifest + apple-touch-icon switch together); the default stays dark.
 

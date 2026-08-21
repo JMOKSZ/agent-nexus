@@ -14,7 +14,7 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 
 - **Agent 矩阵** — 每个 agent 一个实时窗口，带状态灯、延迟、停止/重置按钮；阵容就是一个由你掌控的 JSON 文件（1 个到多个均可）
 - **真终端模式** — 标记 `terminal: true` 的 agent 通过 node-pty + xterm.js 嵌入完整交互式 TUI（比如一个可以直接打字操作的完整 Claude Code 会话）；支持显式 `cmd`/`args`（如 `openclaw tui`）
-- **实时过程流** — 无头 adapter 也能流式输出工作过程（不只是最终回复）：dsh adapter 跟踪 session 日志，实时渲染 CoT transcript（推理 + 工具调用），回复落地后冻结为可折叠块
+- **实时过程流** — adapter 能流式输出工作过程（不只是最终回复）：dsh adapter 监听运行中的 `dsh web` 事件流，实时渲染 CoT transcript（推理 + 工具调用），回复落地后冻结为可折叠块
 - **广播与定向** — 默认发送给全部 agent；`@claude review this diff` 定向发送；底部 chip 一键切换目标
 - **Agent 互调** — agent 在回复里写独立行 `@<agent>: <任务>` 即可调度另一个 agent，也可用 `nexus ask` CLI 或 `POST /api/agent/ask`（深度上限 4，防循环）
 - **共享记忆** — `node:sqlite` 事件溯源存储；`/remember`、agent 回复里的 `MEMO[kind]:` 行自动入库、按相关度召回注入 prompt、`/distill` 蒸馏候选记忆 + 审批流、完整的管理界面
@@ -34,7 +34,7 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 |---|---|---|
 | Claude Code | `claude` | 官方 CLI；配合 cc-switch 切换渠道亦可 |
 | Codex | `codex` | 也会自动探测 Codex.app 内置 CLI |
-| DeepSeek Harness | `dsh` | 需要内建 `headless` profile |
+| DeepSeek Harness | `dsh` | 对接本地 `dsh web` 界面（launchd 服务 `com.agent-nexus.dsh-web`） |
 | OpenClaw | `openclaw` | 通过本地 gateway 的 `agent` 子命令调用；**不会触碰任何外部 IM 通道** |
 | Hermes | `hermes` | 第三方 CLI agent；deck 会话用 `--source tool` 标记，不混入你自己的会话列表 |
 
@@ -162,11 +162,17 @@ agent 之间互相调度有三种方式：
 
 ## 安全说明
 
-服务**只绑定 `127.0.0.1`，没有任何鉴权**——请勿用反向代理或端口转发把它暴露到局域网或公网。OpenClaw 适配器不会向 Telegram 等外部通道投递消息；DSH 适配器使用独立的 headless profile，不影响其他 profile。
+服务**只绑定 `127.0.0.1`，没有任何鉴权**——请勿用反向代理或端口转发把它暴露到局域网或公网。OpenClaw 适配器不会向 Telegram 等外部通道投递消息；DSH 适配器驱动本地 `dsh web`（127.0.0.1:3080），不会触碰独立的 `dsh --profile lark` 进程。
 
 ### Tailscale / 局域网访问
 
-默认只绑定 `127.0.0.1`。需要从 Tailscale 网络内的其他设备（如 iPad / iPhone）访问时，在 launchd plist 或启动环境里设置 `NEXUS_HOST=0.0.0.0`（或具体的 Tailscale IP，如 `100.x.y.z`），然后从设备打开 `http://<Tailscale IP>:7700`。注意 deck 没有鉴权，绑定 `0.0.0.0` 后同网段设备都能访问。
+推荐用 Tailscale Serve 从其他设备（iPad / iPhone）访问，它会提供一个有效的 HTTPS 链接（浏览器不再提示“不安全”）：
+
+    tailscale serve --bg 7700
+
+然后在设备上打开 **`https://<机器名>.<tailnet>.ts.net/`**。服务仍可保持默认绑定 `127.0.0.1`，Tailscale Serve 会把流量代理到本地端口。
+
+备选方案：在 launchd plist 或启动环境里设置 `NEXUS_HOST=0.0.0.0`（或具体的 Tailscale IP，如 `100.x.y.z`），从设备打开 `http://<Tailscale IP>:7700`。注意 deck 没有鉴权且这是明文 HTTP，绑定 `0.0.0.0` 后同网段设备都能访问，因此优先使用上面的 HTTPS Serve 方案。
 
 多台机器区分 PWA 图标：设 `NEXUS_ICON_THEME=light` 会使用浅色底图标（清单与 apple-touch-icon 同步切换），默认深色。
 
