@@ -3,13 +3,23 @@ import { homedir } from 'node:os';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import headlessPkg from '@xterm/headless';
+import serializePkg from '@xterm/addon-serialize';
+const { Terminal: HeadlessTerminal } = headlessPkg;
+const { SerializeAddon } = serializePkg;
 
 // Real interactive terminal sessions for agents configured with "terminal": true.
-// One persistent PTY per agent; web clients attach over WebSocket and get the
-// raw scrollback replayed on connect, so reloads/reconnects restore the screen.
+// One persistent PTY per agent; web clients attach over WebSocket.
+// A server-side headless terminal emulator mirrors all PTY output, so a client
+// attaching gets a *serialized snapshot* (current screen + a little scrollback)
+// instead of a replay of the raw byte history. TUI agents like Claude Code
+// repaint the whole screen every frame — replaying raw bytes meant parsing
+// hundreds of KB of stale frames on every page open; the snapshot is ~10KB
+// and always reflects the live screen exactly.
 // The hub talks to these agents by typing into the PTY (bracketed paste + Enter).
 
-const SCROLLBACK_CAP = 512 * 1024; // bytes of raw PTY output kept for replay
+const EMU_SCROLLBACK = 2000;      // lines the server-side emulator keeps
+const SNAPSHOT_SCROLLBACK = 100;  // lines of real history included in an attach snapshot
 
 // Claude Code's status line shows the *requested* model; under cc-switch proxy
 // mode the client has none configured, so it displays its built-in default
@@ -34,11 +44,18 @@ class TermSession {
     this.id = id;
     this.opts = opts; // { cmd, args, cwd }
     this.clients = new Set();
-    this.buf = [];
-    this.bufLen = 0;
-    this.pty = null;
+    this.holds = new Map(); // ws -> buffered chunks while its attach snapshot is built
     this.cols = 120;
     this.rows = 32;
+    this.emu = new HeadlessTerminal({
+      cols: this.cols,
+      rows: this.rows,
+      scrollback: EMU_SCROLLBACK,
+      allowProposedApi: true,
+    });
+    this.ser = new SerializeAddon();
+    this.emu.loadAddon(this.ser);
+    this.pty = null;
   }
 
   ensure() {
@@ -56,35 +73,44 @@ class TermSession {
       },
     });
     this.pty.onData((d) => {
-      this.push(d);
+      this.emu.write(d);
       for (const c of this.clients) this.safeSend(c, d);
     });
     this.pty.onExit(({ exitCode }) => {
       this.pty = null;
-      this.push(`\r\n\x1b[33m[process exited (code ${exitCode}) — type anything to restart]\x1b[0m\r\n`);
-      for (const c of this.clients) this.safeSend(c, `\r\n\x1b[33m[process exited (code ${exitCode}) — type anything to restart]\x1b[0m\r\n`);
+      const msg = `\r\n\x1b[33m[process exited (code ${exitCode}) — type anything to restart]\x1b[0m\r\n`;
+      this.emu.write(msg);
+      for (const c of this.clients) this.safeSend(c, msg);
     });
   }
 
   safeSend(ws, data) {
+    const held = this.holds.get(ws);
+    if (held) { held.push(data); return; }
     try { ws.send(data); } catch { this.clients.delete(ws); }
-  }
-
-  push(d) {
-    this.buf.push(d);
-    this.bufLen += d.length;
-    while (this.bufLen > SCROLLBACK_CAP && this.buf.length > 1) this.bufLen -= this.buf.shift().length;
   }
 
   attach(ws) {
     this.ensure();
     this.clients.add(ws);
     ws.send(JSON.stringify({ type: 'hello', id: this.id }));
-    for (const chunk of this.buf) this.safeSend(ws, chunk);
-    ws.on('close', () => this.clients.delete(ws));
+    // Hold live chunks for this client while the emulator flush + serialize is
+    // pending, so the snapshot and any concurrent output stay in order.
+    const held = [];
+    this.holds.set(ws, held);
+    // The write callback fires after all queued emulator writes are parsed,
+    // so the snapshot reflects every byte the PTY has produced so far.
+    this.emu.write('', () => {
+      this.holds.delete(ws);
+      let snap = '';
+      try { snap = this.ser.serialize({ scrollback: SNAPSHOT_SCROLLBACK }); } catch { /* serialize best-effort */ }
+      this.safeSend(ws, snap);
+      for (const h of held) this.safeSend(ws, h);
+    });
+    ws.on('close', () => { this.clients.delete(ws); this.holds.delete(ws); });
   }
 
-  detach(ws) { this.clients.delete(ws); }
+  detach(ws) { this.clients.delete(ws); this.holds.delete(ws); }
 
   write(data) {
     this.ensure();
@@ -101,6 +127,7 @@ class TermSession {
     if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2) return;
     this.cols = Math.min(cols, 500);
     this.rows = Math.min(rows, 200);
+    try { this.emu.resize(this.cols, this.rows); } catch { /* bad geometry */ }
     if (this.pty) { try { this.pty.resize(this.cols, this.rows); } catch { /* resizing dead pty */ } }
   }
 
