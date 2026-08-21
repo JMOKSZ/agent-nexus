@@ -22,6 +22,10 @@ const linkify = (s) => s.replace(/https?:\/\/[^\s]+/g, (m) => {
 const fmtTime = (ts) => new Date(ts).toLocaleTimeString('zh-CN', { hour12: false });
 
 /* ── build terminals ── */
+// Effective model label: settings override (snapshot's `model`) wins; empty
+// means the CLI default — fall back to the config's modelHint base text.
+const modelLabel = (a) => a.model || (a.modelHint || '').replace(/\s*\(.*$/, '').trim();
+
 function buildDeck(agents) {
   state.agents = agents;
   AGENT_ORDER = Object.keys(agents);
@@ -44,7 +48,7 @@ function buildDeck(agents) {
         <span class="a-meta">
           <span class="a-latency" id="lat-${id}"></span>
           <button class="a-stop" id="stop-${id}" data-agent="${id}" title="Stop current task and clear the queue"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
-          ${a.stateless ? '' : `<button class="a-reset" data-agent="${id}" title="Reset this agent's session context and clear the window">RESET</button>`}
+          <span class="a-model" id="model-${id}">${esc(modelLabel(a))}</span>
         </span>
       </div>
       <div class="a-task" id="task-${id}"></div>
@@ -58,15 +62,7 @@ function buildDeck(agents) {
     `<span class="top-led" id="tled-${id}" style="${state.agents[id] ? `background:${state.agents[id].color}22` : ''}" title="${id}"></span>`).join('');
 
   document.querySelectorAll('.term-head').forEach((h) =>
-    h.addEventListener('click', (e) => {
-      if (e.target.classList.contains('a-reset')) return;
-      setTarget(h.dataset.agent);
-    }));
-  document.querySelectorAll('.a-reset').forEach((b) =>
-    b.addEventListener('click', () => fetch('/api/reset', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent: b.dataset.agent }),
-    })));
+    h.addEventListener('click', () => setTarget(h.dataset.agent)));
   document.querySelectorAll('.a-stop').forEach((b) =>
     b.addEventListener('click', () => fetch('/api/stop', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -528,6 +524,14 @@ $('#set-save').addEventListener('click', async () => {
   });
   state.settings = await res.json();
   applyUI(state.settings.ui);
+  // refresh model labels in the term heads without waiting for an SSE re-init
+  for (const id of AGENT_ORDER) {
+    if (state.agents[id]) {
+      state.agents[id].model = state.settings.agents[id]?.model || '';
+      const el = $(`#model-${id}`);
+      if (el) el.textContent = modelLabel(state.agents[id]);
+    }
+  }
   $('#set-status').textContent = "SAVED ✓ (model/args apply to this agent's next message)";
 });
 

@@ -138,11 +138,7 @@ body[data-theme="light"] .chip { --cc-ink: color-mix(in srgb, var(--cc, var(--br
 .a-desc { color: var(--dim); font-size: 11px; }
 .a-meta { margin-left: auto; display: flex; align-items: center; gap: 10px; font-size: 10px; color: var(--dim); }
 .a-latency { color: var(--ac-ink); opacity: .8; }
-.a-reset {
-  background: none; border: 1px solid var(--line); color: var(--dim);
-  font-family: var(--mono); font-size: 10px; padding: 2px 7px; border-radius: 4px; cursor: pointer;
-}
-.a-reset:hover { border-color: var(--danger); color: var(--danger); }
+.a-model { font-family: var(--mono); font-size: 10px; color: var(--ac-ink); opacity: .85; letter-spacing: .5px; white-space: nowrap; }
 .a-stop {
   display: none;
   align-items: center; justify-content: center;

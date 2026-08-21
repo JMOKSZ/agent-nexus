@@ -71,6 +71,16 @@ termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
 
 const wss = new WebSocketServer({ noServer: true });
 
+// Snapshot with each agent's effective model merged in (settings override
+// wins; empty means the agent CLI's own default — the frontend then falls
+// back to the config's modelHint).
+const snapshotWithModels = () => {
+  const snap = hub.snapshot();
+  snap.agents = Object.fromEntries(Object.entries(snap.agents).map(([id, a]) =>
+    [id, { ...a, model: getAgentCfg(id).model || '' }]));
+  return snap;
+};
+
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.icns': 'image/icns', '.webmanifest': 'application/manifest+json' };
 
 // Static serving tuned for slow links (tailnet from phone/iPad): gzip text
@@ -139,7 +149,7 @@ const server = createServer(async (req, res) => {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    res.write(`event: init\ndata: ${JSON.stringify(hub.snapshot())}\n\n`);
+    res.write(`event: init\ndata: ${JSON.stringify(snapshotWithModels())}\n\n`);
     const unsubscribe = hub.subscribe((line) => res.write(line));
     const keepalive = setInterval(() => res.write(': ping\n\n'), 25_000);
     req.on('close', () => { clearInterval(keepalive); unsubscribe(); });
@@ -148,7 +158,7 @@ const server = createServer(async (req, res) => {
 
   if (url.pathname === '/api/agents') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(hub.snapshot().agents));
+    res.end(JSON.stringify(snapshotWithModels().agents));
     return;
   }
 
