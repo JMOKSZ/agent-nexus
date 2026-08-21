@@ -456,6 +456,7 @@ $('#feed-btn').addEventListener('click', () => {
   }
   $('#feed-btn').classList.toggle('on', feedVisible());
 });
+$('#refresh-btn').addEventListener('click', () => location.reload());
 $('#clear-btn').addEventListener('click', async () => {
   if (!confirm('Clear all window displays?\nShared memory and the event log (distill source) are not affected.')) return;
   await fetch('/api/display/clear', { method: 'POST' });
