@@ -847,6 +847,11 @@ $('#send-btn').addEventListener('click', send);
 /* ── clock ── */
 setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false }); }, 1000);
 
+/* ── host machine label (shown under // COMMAND DECK) ── */
+fetch('/api/host').then((r) => r.json()).then(({ label }) => {
+  if (label) $('#brand-host').textContent = label.toUpperCase();
+}).catch(() => {});
+
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   if (!$('#memmgr-overlay').hidden) $('#memmgr-overlay').hidden = true;

@@ -80,7 +80,11 @@ body {
 .brand-hex .hex-nodes circle { fill: currentColor; }
 @keyframes hexpulse { 50% { filter: drop-shadow(0 0 12px var(--brand)) drop-shadow(0 0 22px color-mix(in srgb, var(--brand) 40%, transparent)); } }
 .brand-name { font-family: var(--sans); font-size: 17px; font-weight: 800; letter-spacing: 5px; color: var(--text); text-shadow: 0 0 14px color-mix(in srgb, var(--brand) 60%, transparent); }
+.brand-text { display: flex; flex-direction: column; }
+.brand-row { display: flex; align-items: baseline; gap: 10px; }
 .brand-sub { font-family: var(--sans); color: var(--dim); letter-spacing: 3px; font-size: 10px; font-weight: 600; margin-top: 2px; }
+.brand-host { font-family: var(--sans); color: var(--brand); letter-spacing: 2px; font-size: 9px; font-weight: 600; margin-top: 1px; opacity: .85; }
+.brand-host:empty { display: none; }
 .top-status { display: flex; align-items: center; gap: 16px; }
 .led-group { display: flex; gap: 8px; }
 .top-led { width: 9px; height: 9px; border-radius: 50%; background: var(--line); transition: all .3s; }

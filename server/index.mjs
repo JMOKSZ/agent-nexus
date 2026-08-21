@@ -1,6 +1,8 @@
 import { createServer } from 'node:http';
 import { readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { hostname } from 'node:os';
 import { gzipSync } from 'node:zlib';
 import { join, extname, dirname, sep } from 'node:path';
 import { homedir } from 'node:os';
@@ -26,6 +28,22 @@ const MANIFEST_PATH = join(UPLOAD_DIR, 'manifest.json');
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 mkdirSync(UPLOAD_DIR, { recursive: true });
+
+// Human-readable machine label shown in the web header (e.g. "Mac mini · M4 Max").
+// Override with NEXUS_HOST_LABEL; otherwise probe the hardware on macOS and
+// fall back to the hostname.
+let hostLabel = process.env.NEXUS_HOST_LABEL || hostname();
+if (!process.env.NEXUS_HOST_LABEL && process.platform === 'darwin') {
+  execFile('/usr/sbin/system_profiler', ['SPHardwareDataType', '-json'], { timeout: 10000 }, (err, out) => {
+    if (err) return;
+    try {
+      const hw = JSON.parse(out).SPHardwareDataType?.[0] || {};
+      const model = hw.machine_name;              // "Mac mini"
+      const chip = (hw.chip_type || '').replace(/^Apple\s+/, ''); // "M4 Max"
+      if (model) hostLabel = chip ? `${model} · ${chip}` : model;
+    } catch { /* keep hostname fallback */ }
+  });
+}
 let manifest = {};
 try { manifest = JSON.parse(readFileSync(MANIFEST_PATH, 'utf8')); } catch { /* fresh */ }
 const saveManifest = () => {
@@ -131,6 +149,12 @@ const server = createServer(async (req, res) => {
   if (url.pathname === '/api/agents') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(hub.snapshot().agents));
+    return;
+  }
+
+  if (url.pathname === '/api/host') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ label: hostLabel }));
     return;
   }
 
