@@ -315,7 +315,7 @@ details.process-log pre { margin: 6px 0 0; max-height: 320px; overflow-y: auto; 
 #cmd-input::placeholder { color: var(--dim); }
 
 /* ── embedded xterm ── */
-.term-body.xterm-host { padding: 2px 4px; overflow: hidden; }
+.term-body.xterm-host { padding: 2px 4px; overflow: hidden; touch-action: none; }
 .term-body.xterm-host .xterm { height: 100%; }
 .term-body.xterm-host .xterm-viewport { scrollbar-width: thin; overscroll-behavior: contain; }
 /* xterm.css paints the viewport solid #000 — let the .term panel gradient show through */

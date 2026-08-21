@@ -139,6 +139,7 @@ function initXterm(id) {
     const ws = xterms[id].ws;
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'in', data: d }));
   });
+  attachTouchScroll(id, term, host);
   // soft keybar integration: track which terminal owns the bar's keystrokes,
   // and let the Ctrl latch rewrite the next key event into a control sequence
   term.textarea?.addEventListener('focus', () => kbSetFocused(id));
@@ -146,6 +147,51 @@ function initXterm(id) {
   term.attachCustomKeyEventHandler((ev) => kbKeyEvent(term, ev));
   connectWs();
   new ResizeObserver(() => doFit(id)).observe(host);
+}
+
+/* ── touch scrolling for embedded terminals (iPad/iPhone) ── */
+// xterm.js only scrolls its viewport on wheel events; touch drags do nothing.
+// Single-finger vertical drag on a terminal translates to:
+//   - SGR mouse-wheel sequences sent to the PTY when the app reports mouse
+//     tracking (Claude Code TUI does — this scrolls its conversation view);
+//   - term.scrollLines() otherwise (normal buffer with scrollback).
+// A long-press that stays put (>450ms, <10px) is left alone so xterm's own
+// touch text-selection still works.
+function attachTouchScroll(id, term, host) {
+  let active = false, selecting = false, lastY = 0, acc = 0, moved = 0, t0 = 0;
+  const sendWheel = (dir, col, row) => {
+    const ws = xterms[id]?.ws;
+    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'in', data: `\x1b[<${dir};${col};${row}M` }));
+  };
+  host.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { active = false; return; }
+    active = true; selecting = false;
+    lastY = e.touches[0].clientY; acc = 0; moved = 0; t0 = Date.now();
+  }, { passive: true });
+  host.addEventListener('touchmove', (e) => {
+    if (!active || selecting || e.touches.length !== 1) return;
+    const touch = e.touches[0];
+    const dy = lastY - touch.clientY;
+    lastY = touch.clientY;
+    moved += Math.abs(dy);
+    if (moved < 10 && Date.now() - t0 > 450) { selecting = true; return; } // long-press selection
+    if (moved < 8) return; // tap jitter
+    e.preventDefault(); // host has touch-action:none; stop xterm selection too
+    const rect = host.getBoundingClientRect();
+    const cellH = rect.height / Math.max(term.rows, 1);
+    acc += dy;
+    const col = Math.max(1, Math.min(term.cols, Math.floor((touch.clientX - rect.left) / (rect.width / Math.max(term.cols, 1))) + 1));
+    const row = Math.max(1, Math.min(term.rows, Math.floor((touch.clientY - rect.top) / cellH) + 1));
+    const mouseOn = term.modes && term.modes.mouseTrackingMode && term.modes.mouseTrackingMode !== 'none';
+    while (Math.abs(acc) >= cellH) {
+      const notch = acc > 0 ? 1 : -1; // drag up → scroll down
+      acc -= notch * cellH;
+      if (mouseOn) sendWheel(notch > 0 ? 65 : 64, col, row);
+      else term.scrollLines(notch);
+    }
+  }, { passive: false });
+  host.addEventListener('touchend', () => { active = false; }, { passive: true });
+  host.addEventListener('touchcancel', () => { active = false; }, { passive: true });
 }
 
 /* ── soft keybar (touch devices: ESC / Ctrl / arrows for real terminals) ── */
