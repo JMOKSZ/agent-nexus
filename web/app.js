@@ -52,6 +52,7 @@ function buildDeck(agents) {
     quad.appendChild(term);
   }
   for (const id of AGENT_ORDER) if (state.agents[id]?.terminal) initXterm(id);
+  if (kbState.focused) kbSetFocused(kbState.focused); // hosts were rebuilt — restore highlight
   // top LEDs
   $('#top-leds').innerHTML = AGENT_ORDER.map((id) =>
     `<span class="top-led" id="tled-${id}" style="${state.agents[id] ? `background:${state.agents[id].color}22` : ''}" title="${id}"></span>`).join('');
@@ -138,8 +139,141 @@ function initXterm(id) {
     const ws = xterms[id].ws;
     if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'in', data: d }));
   });
+  // soft keybar integration: track which terminal owns the bar's keystrokes,
+  // and let the Ctrl latch rewrite the next key event into a control sequence
+  term.textarea?.addEventListener('focus', () => kbSetFocused(id));
+  host.addEventListener('pointerdown', () => kbSetFocused(id));
+  term.attachCustomKeyEventHandler((ev) => kbKeyEvent(term, ev));
   connectWs();
   new ResizeObserver(() => doFit(id)).observe(host);
+}
+
+/* ── soft keybar (touch devices: ESC / Ctrl / arrows for real terminals) ── */
+// One global bar docked above the command bar; it targets the terminal that
+// last had focus. CTRL is a sticky latch: tap it, then the next key (bar key
+// or software/hardware keyboard) is sent as a control sequence. Buttons use
+// pointerdown + preventDefault so tapping them never steals terminal focus
+// (which would collapse the iPad software keyboard).
+const kbState = { ctrl: false, focused: null };
+
+const KB_ROWS = [
+  [
+    { label: 'ESC', seq: '\x1b' },
+    { label: 'TAB', seq: '\t' },
+    { label: 'CTRL', latch: true },
+    { label: '←', seq: '\x1b[D', cseq: '\x1b[1;5D' },
+    { label: '↑', seq: '\x1b[A', cseq: '\x1b[1;5A' },
+    { label: '↓', seq: '\x1b[B', cseq: '\x1b[1;5B' },
+    { label: '→', seq: '\x1b[C', cseq: '\x1b[1;5C' },
+  ],
+  [
+    { label: '^C', seq: '\x03', title: 'Ctrl+C — interrupt' },
+    { label: '^D', seq: '\x04', title: 'Ctrl+D — EOF' },
+    { label: '^Z', seq: '\x1a', title: 'Ctrl+Z — suspend' },
+    { label: '⇧TAB', seq: '\x1b[Z', title: 'Shift+Tab — cycle Claude Code modes' },
+    { label: 'HOME', seq: '\x1b[H' },
+    { label: 'END', seq: '\x1b[F' },
+    { label: 'PG↑', seq: '\x1b[5~' },
+    { label: 'PG↓', seq: '\x1b[6~' },
+  ],
+];
+
+const KB_ARROW_CTRL = {
+  ArrowUp: '\x1b[1;5A', ArrowDown: '\x1b[1;5B',
+  ArrowRight: '\x1b[1;5C', ArrowLeft: '\x1b[1;5D',
+};
+
+function kbTarget() {
+  if (kbState.focused && xterms[kbState.focused]) return kbState.focused;
+  if (xterms[state.target]) return state.target;
+  return Object.keys(xterms)[0] || null;
+}
+
+function kbSetFocused(id) {
+  if (!xterms[id]) return;
+  kbState.focused = id;
+  document.querySelectorAll('.term.kb-focus').forEach((el) => el.classList.remove('kb-focus'));
+  $(`#term-${id}`)?.classList.add('kb-focus');
+}
+
+function kbSetCtrl(on) {
+  kbState.ctrl = on;
+  $('#keybar .kb-key.kb-latch')?.classList.toggle('active', on);
+}
+
+function kbInput(seq) {
+  const id = kbTarget();
+  if (!id) return;
+  xterms[id].term.input(seq); // fires onData → ws, same path as real typing
+}
+
+// Custom key event handler installed on every xterm: when the Ctrl latch is
+// armed, rewrite the next real key into its control form and swallow it.
+function kbKeyEvent(term, ev) {
+  if (!kbState.ctrl || ev.type !== 'keydown') return true;
+  if (ev.ctrlKey || ev.metaKey || ev.altKey) return true; // real modifiers win
+  let seq = null;
+  if (KB_ARROW_CTRL[ev.key]) seq = KB_ARROW_CTRL[ev.key];
+  else if (ev.key.length === 1) {
+    const code = ev.key.toUpperCase().charCodeAt(0);
+    if (code >= 0x40 && code <= 0x5f) seq = String.fromCharCode(code & 0x1f);
+  }
+  if (!seq) return true; // unmappable key (Shift etc.) — keep the latch armed
+  term.input(seq);
+  kbSetCtrl(false);
+  return false;
+}
+
+function buildKeybar() {
+  const bar = $('#keybar');
+  bar.innerHTML = KB_ROWS.map((row) =>
+    `<div class="kb-row">${row.map((k) =>
+      `<button class="kb-key${k.latch ? ' kb-latch' : ''}" tabindex="-1"${k.title ? ` title="${k.title}"` : ''}>${k.label}</button>`
+    ).join('')}</div>`
+  ).join('') + '<button class="kb-key kb-hide" tabindex="-1" title="Hide soft keyboard">✕</button>';
+
+  bar.querySelectorAll('.kb-row').forEach((rowEl, r) => {
+    rowEl.querySelectorAll('.kb-key').forEach((btn, c) => {
+      const key = KB_ROWS[r][c];
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault(); // keep terminal focus / software keyboard open
+        if (key.latch) { kbSetCtrl(!kbState.ctrl); return; }
+        kbInput(kbState.ctrl && key.cseq ? key.cseq : key.seq);
+        if (kbState.ctrl) kbSetCtrl(false);
+      });
+    });
+  });
+  bar.querySelector('.kb-hide').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    kbSetCtrl(false);
+    kbShow(false);
+  });
+
+  $('#kb-pill').addEventListener('click', () => kbShow(true));
+
+  // Default: visible on touch-primary devices, hidden elsewhere;
+  // a manual toggle persists and overrides the default.
+  const pref = localStorage.getItem('nexus.keybar');
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  kbShow(pref ? pref === 'show' : coarse, true);
+
+  // Keep the bar above the iPad software keyboard (visualViewport shrinks).
+  const vv = window.visualViewport;
+  if (vv) {
+    const lift = () => {
+      const off = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      bar.style.transform = off ? `translateY(${-off}px)` : '';
+      $('#kb-pill').style.transform = off ? `translateY(${-off}px)` : '';
+    };
+    vv.addEventListener('resize', lift);
+    vv.addEventListener('scroll', lift);
+  }
+}
+
+function kbShow(on, init) {
+  $('#keybar').hidden = !on;
+  $('#kb-pill').hidden = on;
+  if (!init) localStorage.setItem('nexus.keybar', on ? 'show' : 'hide');
 }
 
 /* ── command bar chips ── */
@@ -778,4 +912,5 @@ document.querySelectorAll('.mm-chip').forEach((c) =>
 
 loadSettings();
 loadMemories();
+buildKeybar();
 connect();
