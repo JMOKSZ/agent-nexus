@@ -213,6 +213,7 @@ const KB_ROWS = [
     { label: '^C', seq: '\x03', title: 'Ctrl+C — interrupt' },
     { label: '^D', seq: '\x04', title: 'Ctrl+D — EOF' },
     { label: '^Z', seq: '\x1a', title: 'Ctrl+Z — suspend' },
+    { label: '^V', seq: '\x16', title: 'Ctrl+V — paste' },
     { label: '⇧TAB', seq: '\x1b[Z', title: 'Shift+Tab — cycle Claude Code modes' },
     { label: 'HOME', seq: '\x1b[H', sseq: '\x1b[1;2H' },
     { label: 'END', seq: '\x1b[F', sseq: '\x1b[1;2F' },
