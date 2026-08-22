@@ -196,34 +196,32 @@ function attachTouchScroll(id, term, host) {
 // or software/hardware keyboard) is sent as a control sequence. Buttons use
 // pointerdown + preventDefault so tapping them never steals terminal focus
 // (which would collapse the iPad software keyboard).
-const kbState = { ctrl: false, focused: null };
+const kbState = { ctrl: false, shift: false, focused: null };
 
 const KB_ROWS = [
   [
     { label: 'ESC', seq: '\x1b' },
-    { label: 'TAB', seq: '\t' },
-    { label: 'CTRL', latch: true },
-    { label: '←', seq: '\x1b[D', cseq: '\x1b[1;5D' },
-    { label: '↑', seq: '\x1b[A', cseq: '\x1b[1;5A' },
-    { label: '↓', seq: '\x1b[B', cseq: '\x1b[1;5B' },
-    { label: '→', seq: '\x1b[C', cseq: '\x1b[1;5C' },
+    { label: 'TAB', seq: '\t', sseq: '\x1b[Z' },
+    { label: 'CTRL', latch: 'ctrl' },
+    { label: 'SHIFT', latch: 'shift' },
+    { label: '←', seq: '\x1b[D', cseq: '\x1b[1;5D', sseq: '\x1b[1;2D', csseq: '\x1b[1;6D' },
+    { label: '↑', seq: '\x1b[A', cseq: '\x1b[1;5A', sseq: '\x1b[1;2A', csseq: '\x1b[1;6A' },
+    { label: '↓', seq: '\x1b[B', cseq: '\x1b[1;5B', sseq: '\x1b[1;2B', csseq: '\x1b[1;6B' },
+    { label: '→', seq: '\x1b[C', cseq: '\x1b[1;5C', sseq: '\x1b[1;2C', csseq: '\x1b[1;6C' },
   ],
   [
     { label: '^C', seq: '\x03', title: 'Ctrl+C — interrupt' },
     { label: '^D', seq: '\x04', title: 'Ctrl+D — EOF' },
     { label: '^Z', seq: '\x1a', title: 'Ctrl+Z — suspend' },
     { label: '⇧TAB', seq: '\x1b[Z', title: 'Shift+Tab — cycle Claude Code modes' },
-    { label: 'HOME', seq: '\x1b[H' },
-    { label: 'END', seq: '\x1b[F' },
-    { label: 'PG↑', seq: '\x1b[5~' },
-    { label: 'PG↓', seq: '\x1b[6~' },
+    { label: 'HOME', seq: '\x1b[H', sseq: '\x1b[1;2H' },
+    { label: 'END', seq: '\x1b[F', sseq: '\x1b[1;2F' },
+    { label: 'PG↑', seq: '\x1b[5~', sseq: '\x1b[5;2~' },
+    { label: 'PG↓', seq: '\x1b[6~', sseq: '\x1b[6;2~' },
   ],
 ];
 
-const KB_ARROW_CTRL = {
-  ArrowUp: '\x1b[1;5A', ArrowDown: '\x1b[1;5B',
-  ArrowRight: '\x1b[1;5C', ArrowLeft: '\x1b[1;5D',
-};
+const KB_ARROWS = { ArrowUp: 'A', ArrowDown: 'B', ArrowRight: 'C', ArrowLeft: 'D' };
 
 function kbTarget() {
   if (kbState.focused && xterms[kbState.focused]) return kbState.focused;
@@ -240,7 +238,12 @@ function kbSetFocused(id) {
 
 function kbSetCtrl(on) {
   kbState.ctrl = on;
-  $('#keybar .kb-key.kb-latch')?.classList.toggle('active', on);
+  $('#keybar .kb-latch[data-latch="ctrl"]')?.classList.toggle('active', on);
+}
+
+function kbSetShift(on) {
+  kbState.shift = on;
+  $('#keybar .kb-latch[data-latch="shift"]')?.classList.toggle('active', on);
 }
 
 function kbInput(seq) {
@@ -249,20 +252,27 @@ function kbInput(seq) {
   xterms[id].term.input(seq); // fires onData → ws, same path as real typing
 }
 
-// Custom key event handler installed on every xterm: when the Ctrl latch is
-// armed, rewrite the next real key into its control form and swallow it.
+// Custom key event handler installed on every xterm: when a latch (Ctrl /
+// Shift) is armed, rewrite the next real key into its modified form and
+// swallow it. Ctrl+Shift+arrow combines (modifier param 6).
 function kbKeyEvent(term, ev) {
-  if (!kbState.ctrl || ev.type !== 'keydown') return true;
+  if ((!kbState.ctrl && !kbState.shift) || ev.type !== 'keydown') return true;
   if (ev.ctrlKey || ev.metaKey || ev.altKey) return true; // real modifiers win
   let seq = null;
-  if (KB_ARROW_CTRL[ev.key]) seq = KB_ARROW_CTRL[ev.key];
-  else if (ev.key.length === 1) {
+  const arrow = KB_ARROWS[ev.key];
+  if (arrow) {
+    const m = kbState.ctrl && kbState.shift ? 6 : kbState.ctrl ? 5 : 2;
+    seq = `\x1b[1;${m}${arrow}`;
+  } else if (kbState.ctrl && ev.key.length === 1) {
     const code = ev.key.toUpperCase().charCodeAt(0);
     if (code >= 0x40 && code <= 0x5f) seq = String.fromCharCode(code & 0x1f);
+  } else if (kbState.shift && ev.key.length === 1 && /^[a-z]$/i.test(ev.key)) {
+    seq = ev.key.toUpperCase();
   }
-  if (!seq) return true; // unmappable key (Shift etc.) — keep the latch armed
+  if (!seq) return true; // unmappable key (a modifier itself etc.) — keep latches armed
   term.input(seq);
   kbSetCtrl(false);
+  kbSetShift(false);
   return false;
 }
 
@@ -270,7 +280,7 @@ function buildKeybar() {
   const bar = $('#keybar');
   bar.innerHTML = KB_ROWS.map((row) =>
     `<div class="kb-row">${row.map((k) =>
-      `<button class="kb-key${k.latch ? ' kb-latch' : ''}" tabindex="-1"${k.title ? ` title="${k.title}"` : ''}>${k.label}</button>`
+      `<button class="kb-key${k.latch ? ' kb-latch' : ''}"${k.latch ? ` data-latch="${k.latch}"` : ''} tabindex="-1"${k.title ? ` title="${k.title}"` : ''}>${k.label}</button>`
     ).join('')}</div>`
   ).join('') + '<button class="kb-key kb-hide" tabindex="-1" title="Hide soft keyboard">✕</button>';
 
@@ -279,15 +289,22 @@ function buildKeybar() {
       const key = KB_ROWS[r][c];
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault(); // keep terminal focus / software keyboard open
-        if (key.latch) { kbSetCtrl(!kbState.ctrl); return; }
-        kbInput(kbState.ctrl && key.cseq ? key.cseq : key.seq);
+        if (key.latch === 'ctrl') { kbSetCtrl(!kbState.ctrl); return; }
+        if (key.latch === 'shift') { kbSetShift(!kbState.shift); return; }
+        const seq = kbState.ctrl && kbState.shift && key.csseq ? key.csseq
+          : kbState.ctrl && key.cseq ? key.cseq
+          : kbState.shift && key.sseq ? key.sseq
+          : key.seq;
+        kbInput(seq);
         if (kbState.ctrl) kbSetCtrl(false);
+        if (kbState.shift) kbSetShift(false);
       });
     });
   });
   bar.querySelector('.kb-hide').addEventListener('pointerdown', (e) => {
     e.preventDefault();
     kbSetCtrl(false);
+    kbSetShift(false);
     kbShow(false);
   });
 
