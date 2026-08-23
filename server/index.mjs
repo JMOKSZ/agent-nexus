@@ -14,7 +14,7 @@ import { loadSettings, saveSettings, getAgentCfg, splitArgs } from './settings.m
 import { listMemories, recallMemories, addMemory, retireMemory, approveMemory, restoreMemory, updateMemory, listAllMemories, listStaged, normalizeKind } from './memory.mjs';
 import { ADAPTER_TYPES } from './adapters/index.mjs';
 import { loadAgentsConfig } from './agents-config.mjs';
-import { termManager } from './terminal.mjs';
+import { termManager, ccSwitchModelEnv } from './terminal.mjs';
 import { WebSocketServer } from 'ws';
 
 const PORT = Number(process.env.NEXUS_PORT || 7700);
@@ -73,11 +73,14 @@ const wss = new WebSocketServer({ noServer: true });
 
 // Snapshot with each agent's effective model merged in (settings override
 // wins; empty means the agent CLI's own default — the frontend then falls
-// back to the config's modelHint).
+// back to the config's modelHint). Claude agents under cc-switch proxy show
+// the *routed* backend model (e.g. k3), not the CLI default.
+const claudeIds = new Set(agentsList.filter((a) => a.adapter === 'claude').map((a) => a.id));
 const snapshotWithModels = () => {
+  const realClaude = ccSwitchModelEnv().ANTHROPIC_MODEL || '';
   const snap = hub.snapshot();
   snap.agents = Object.fromEntries(Object.entries(snap.agents).map(([id, a]) =>
-    [id, { ...a, model: getAgentCfg(id).model || '' }]));
+    [id, { ...a, model: getAgentCfg(id).model || (claudeIds.has(id) ? realClaude : '') }]));
   return snap;
 };
 
@@ -290,8 +293,11 @@ const server = createServer(async (req, res) => {
     const saved = saveSettings(body, extraAllowed);
     const fields = Object.fromEntries(agentsList.map((a) =>
       [a.id, ADAPTER_TYPES[a.adapter].settingFields || []]));
+    // Effective per-agent models (post-cc-switch resolution) so the frontend
+    // can refresh labels immediately without waiting for an SSE re-init.
+    const models = Object.fromEntries(Object.entries(snapshotWithModels().agents).map(([id, a]) => [id, a.model]));
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ...saved, fields }));
+    res.end(JSON.stringify({ ...saved, fields, models }));
     return;
   }
 

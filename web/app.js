@@ -317,6 +317,11 @@ function buildKeybar() {
   const coarse = matchMedia('(pointer: coarse)').matches;
   kbShow(pref ? pref === 'show' : coarse, true);
 
+  // Dock the strip below the topbar, aligned with the deck's top edge.
+  const setTop = () => { bar.style.top = `${$('#topbar').offsetHeight + 12}px`; };
+  setTop();
+  addEventListener('resize', setTop);
+
   // Keep the bar above the iPad software keyboard (visualViewport shrinks).
   const vv = window.visualViewport;
   if (vv) {
@@ -333,6 +338,7 @@ function buildKeybar() {
 function kbShow(on, init) {
   $('#keybar').hidden = !on;
   $('#kb-pill').hidden = on;
+  document.body.classList.toggle('kb-open', on);
   if (!init) localStorage.setItem('nexus.keybar', on ? 'show' : 'hide');
 }
 
@@ -545,7 +551,7 @@ $('#set-save').addEventListener('click', async () => {
   // refresh model labels in the term heads without waiting for an SSE re-init
   for (const id of AGENT_ORDER) {
     if (state.agents[id]) {
-      state.agents[id].model = state.settings.agents[id]?.model || '';
+      state.agents[id].model = state.settings.agents[id]?.model || state.settings.models?.[id] || '';
       const el = $(`#model-${id}`);
       if (el) el.textContent = modelLabel(state.agents[id]);
     }
@@ -794,6 +800,8 @@ function connect() {
     state.feedCount = 0;
     for (const m of snap.messages) renderMsg(m);
     setConn(true);
+    // Return focus to command input after terminal initialization
+    setTimeout(() => $('#cmd-input').focus(), 100);
   });
   es.addEventListener('msg', (e) => { const m = JSON.parse(e.data); renderMsg(m); maybeNotify(m); });
   es.addEventListener('display-clear', (e) => {
@@ -924,6 +932,10 @@ const applyPlaceholder = () => {
 PHONE_MQ.addEventListener('change', applyPlaceholder);
 applyPlaceholder();
 
+$('#cmd-input').addEventListener('focus', () => {
+  // Blur any xterm terminal textarea so keyboard input goes to cmd-input
+  document.querySelectorAll('.xterm-helper-textarea').forEach((ta) => ta.blur());
+});
 $('#cmd-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && e.shiftKey) { e.preventDefault(); send(); }
 });

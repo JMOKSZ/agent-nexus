@@ -26,7 +26,7 @@ const SNAPSHOT_SCROLLBACK = 100;  // lines of real history included in an attach
 // while the proxy routes elsewhere. Read the current provider's model env from
 // cc-switch so the terminal shows the real backend model. Resolved per spawn,
 // so a provider switch applies on the next PTY restart.
-function ccSwitchModelEnv() {
+export function ccSwitchModelEnv() {
   try {
     const dir = join(homedir(), '.cc-switch');
     const { currentProviderClaude } = JSON.parse(readFileSync(join(dir, 'settings.json'), 'utf8'));

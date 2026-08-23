@@ -547,16 +547,20 @@ body.focus-mode #deck { overflow: hidden; }
   body { transition: none; }
 }
 
-/* ── soft keybar (touch devices) ── */
+/* ── soft keybar (touch devices): vertical strip docked on the right edge ── */
 #keybar {
-  z-index: 3; display: flex; align-items: center; gap: 6px;
-  padding: 6px 10px;
-  border-top: 1px solid var(--line);
-  background: linear-gradient(0deg, color-mix(in srgb, var(--bg) 97%, transparent), color-mix(in srgb, var(--bg) 85%, transparent));
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 6px;
+  padding: 10px 6px; overflow-y: auto; scrollbar-width: none;
+  border-left: 1px solid var(--line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bg) 85%, transparent), color-mix(in srgb, var(--bg) 97%, transparent));
 }
+#keybar::-webkit-scrollbar { display: none; }
 #keybar[hidden] { display: none; }
-.kb-row { display: flex; gap: 6px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
-.kb-row::-webkit-scrollbar { display: none; }
+.kb-row { display: flex; flex-direction: column; gap: 4px; }
+#keybar .kb-key { width: 46px; min-width: 0; height: 30px; padding: 0 4px; font-size: 9.5px; letter-spacing: .5px; }
+/* leave room for the strip while it is open */
+body.kb-open #deck, body.kb-open #cmdbar { margin-right: 60px; }
 .kb-key {
   flex: 0 0 auto; min-width: 46px; height: 38px; padding: 0 12px;
   font-family: var(--mono); font-size: 12px; font-weight: 700; letter-spacing: 1px;
@@ -571,7 +575,7 @@ body.focus-mode #deck { overflow: hidden; }
   background: color-mix(in srgb, var(--brand) 18%, transparent);
   box-shadow: 0 0 12px color-mix(in srgb, var(--brand) 35%, transparent);
 }
-.kb-hide { min-width: 34px; padding: 0 8px; color: var(--dim); }
+.kb-hide { width: 28px !important; min-width: 0; padding: 0; color: var(--dim); }
 /* terminal currently receiving keybar input */
 .term.kb-focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ac, var(--brand)) 60%, transparent); }
 /* floating pill to bring the bar back */
@@ -586,5 +590,5 @@ body.focus-mode #deck { overflow: hidden; }
 }
 #kb-pill[hidden] { display: none; }
 @media (pointer: coarse) {
-  .kb-key { height: 42px; } /* bigger touch targets */
+  #keybar .kb-key { height: 34px; } /* bigger touch targets */
 }
