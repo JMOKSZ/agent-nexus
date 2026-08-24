@@ -239,9 +239,13 @@ async function runPrompt({ sessionId, text, onDelta }) {
 
 export const dshAdapter = {
   id: 'dsh',
-  // The web session keeps its own history; NEXUS still prepends shared context
-  // each run and treats every message as a standalone dispatch.
+  // The web session keeps its own history (the dsh web GUI session IS the
+  // conversation), so NEXUS must not re-inject the recent-events block
+  // ([最近相关上下文]) on every message — that replays the whole prior
+  // conversation into each new message. sessionCarriesHistory tells the hub
+  // to skip the event section and only prepend shared memories.
   stateless: true,
+  sessionCarriesHistory: true,
   streamIsProcess: true, // live deltas are CoT, not the reply — hub keeps them collapsed
   slashCommands: ['status'],
 

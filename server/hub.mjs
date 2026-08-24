@@ -156,12 +156,14 @@ export class Hub {
     let streamed = '';
     try {
       // Memory/context injection (budget per agent, 0 disables):
-      // - stateless agents (dsh): full block (memories + recent events)
+      // - stateless agents with no session history (dsh is the exception: its
+      //   web session keeps the full conversation, so it gets memories only)
       // - sessioned agents: memories only — their session covers history,
       //   but not what other agents/users wrote to shared memory
       const budget = getAgentCfg(agentId).ctxChars ?? (adapter.stateless ? 1800 : 900);
+      const includeRecentEvents = adapter.stateless && !adapter.sessionCarriesHistory;
       const prompt = budget > 0
-        ? (adapter.stateless
+        ? (includeRecentEvents
           ? buildContextBlock(agentId, { maxChars: budget, query: text })
           : buildContextBlock(agentId, { maxChars: budget, includeEvents: false, query: text })) + text
         : text;
