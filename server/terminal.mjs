@@ -40,10 +40,12 @@ export function ccSwitchModelEnv() {
 }
 
 class TermSession {
-  constructor(id, opts) {
+  constructor(id, opts, mgr) {
     this.id = id;
     this.opts = opts; // { cmd, args, cwd }
+    this.mgr = mgr;
     this.clients = new Set();
+    this.kbClients = new Set(); // remote-keyboard clients: input only, no PTY output
     this.holds = new Map(); // ws -> buffered chunks while its attach snapshot is built
     this.cols = 120;
     this.rows = 32;
@@ -110,7 +112,21 @@ class TermSession {
     ws.on('close', () => { this.clients.delete(ws); this.holds.delete(ws); });
   }
 
-  detach(ws) { this.clients.delete(ws); this.holds.delete(ws); }
+  detach(ws) {
+    this.clients.delete(ws);
+    this.holds.delete(ws);
+    if (this.kbClients.delete(ws)) this.mgr?.onKbChange?.();
+  }
+
+  // Mark a client as a remote keyboard: it stops receiving PTY output (it only
+  // ever sends input), and the hub is notified so the UI can show kb status.
+  markKb(ws) {
+    if (this.kbClients.has(ws)) return;
+    this.clients.delete(ws);
+    this.holds.delete(ws);
+    this.kbClients.add(ws);
+    this.mgr?.onKbChange?.();
+  }
 
   write(data) {
     this.ensure();
@@ -135,14 +151,21 @@ class TermSession {
 }
 
 class TerminalManager {
-  constructor() { this.sessions = new Map(); }
+  constructor() { this.sessions = new Map(); this.onKbChange = null; }
 
   configure(defs) {
     for (const d of defs) {
       if (!this.sessions.has(d.id)) {
-        this.sessions.set(d.id, new TermSession(d.id, { cmd: d.cmd, args: d.args || [], cwd: d.cwd }));
+        this.sessions.set(d.id, new TermSession(d.id, { cmd: d.cmd, args: d.args || [], cwd: d.cwd }, this));
       }
     }
+  }
+
+  // agentId -> connected remote-keyboard count (only agents with kb attached)
+  kbCounts() {
+    const out = {};
+    for (const [id, s] of this.sessions) if (s.kbClients.size) out[id] = s.kbClients.size;
+    return out;
   }
 
   has(id) { return this.sessions.has(id); }

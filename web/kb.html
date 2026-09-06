@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>NEXUS ⌨ Remote Keyboard</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#0d0e1a">
+<style>
+:root {
+  --bg: #0d0e1a; --panel: #171827; --line: #2a2c44; --text: #d6d8f0;
+  --dim: #7a7da0; --accent: #00f0ff; --ok: #7cff4f; --bad: #ff5f6b;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, "SF Pro Text", "PingFang SC", sans-serif;
+  display: flex; flex-direction: column;
+  height: 100dvh; overflow: hidden;
+}
+header {
+  display: flex; align-items: center; gap: 8px; flex: 0 0 auto;
+  padding: calc(env(safe-area-inset-top) + 8px) 14px 8px;
+  border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.brand { font-weight: 700; letter-spacing: 1px; font-size: 14px; }
+.brand span { color: var(--dim); font-weight: 400; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); margin-left: auto; }
+.dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+#agents { display: flex; gap: 8px; padding: 8px 14px; overflow-x: auto; flex: 0 0 auto; background: var(--bg); }
+#agents button {
+  flex: 0 0 auto; padding: 8px 14px; border-radius: 20px; font-size: 13px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+}
+#agents button.on { border-color: var(--accent); color: var(--accent); }
+#agents button:disabled { opacity: .35; }
+.spacer { flex: 1 1 auto; }
+#input-row { flex: 0 0 auto; display: flex; gap: 8px; align-items: flex-end; padding: 8px 14px 4px; }
+#kb-in {
+  flex: 1; display: block; padding: 12px 14px; font-size: 18px; line-height: 1.4;
+  min-height: 84px; max-height: 32dvh; overflow-y: auto;
+  color: var(--text); background: var(--panel); border: 1px solid var(--line);
+  border-radius: 10px; outline: none; resize: none;
+}
+#kb-in:focus { border-color: var(--accent); }
+#up-btn {
+  flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; font-size: 19px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--dim);
+}
+#up-btn:active { border-color: var(--accent); color: var(--accent); }
+#keys {
+  flex: 0 0 auto;
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
+  padding: 8px 14px calc(env(safe-area-inset-bottom) + 10px);
+}
+#keys button {
+  padding: 9px 0; font-size: 13px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--panel); color: var(--text);
+}
+#keys button:active { background: var(--line); }
+#keys .enter { background: var(--accent); border-color: var(--accent); color: #04222a; font-weight: 700; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">NEXUS <span>⌨ KEYBOARD</span></div>
+  <div class="dot" id="dot"></div>
+</header>
+<div id="agents"></div>
+<div class="spacer"></div>
+<div id="input-row">
+  <textarea id="kb-in" rows="2" placeholder="打字即键入所选终端，回车发送" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send"></textarea>
+  <button id="up-btn" title="上传文件到终端">📎</button>
+  <input type="file" id="file-input" hidden>
+</div>
+<div id="keys"></div>
+
+<script>
+'use strict';
+const $ = (s) => document.querySelector(s);
+const input = $('#kb-in'), dot = $('#dot');
+
+let ws = null, target = null, agents = {};
+
+/* ── special keys ── */
+const KEYS = [
+  { label: 'ESC', seq: '\x1b' },
+  { label: '←', seq: '\x1b[D' },
+  { label: '↑', seq: '\x1b[A' },
+  { label: '↓', seq: '\x1b[B' },
+  { label: '→', seq: '\x1b[C' },
+  { label: '⏎', seq: '\r', cls: 'enter' },
+];
+const keysEl = $('#keys');
+for (const k of KEYS) {
+  const b = document.createElement('button');
+  b.textContent = k.label;
+  if (k.cls) b.className = k.cls;
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); // keep software keyboard open
+    send(k.seq);
+    if (k.seq === '\r') { input.value = ''; last = ''; autoGrow(); }
+  });
+  keysEl.appendChild(b);
+}
+
+/* ── file upload → hub uploads dir, path typed into the terminal draft ── */
+const upBtn = $('#up-btn'), fileInput = $('#file-input');
+upBtn.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', async () => {
+  const f = fileInput.files[0];
+  fileInput.value = '';
+  if (!f) return;
+  upBtn.textContent = '⏳';
+  try {
+    const dataURL = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(f);
+    });
+    const resp = await fetch('/api/upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: f.name, type: f.type, data: String(dataURL).split(',')[1] }),
+    });
+    const meta = await resp.json();
+    if (!resp.ok || !meta.path) throw new Error(meta.error || resp.status);
+    // Type the stored path into the draft — user adds instructions, then ⏎.
+    input.value = (input.value ? input.value + ' ' : '') + meta.path;
+    flush();
+    upBtn.textContent = '✓';
+  } catch { upBtn.textContent = '✗'; }
+  setTimeout(() => { upBtn.textContent = '📎'; }, 1500);
+});
+
+/* ── agent picker (terminal agents only — they accept raw keystrokes) ── */
+async function loadAgents() {
+  try {
+    agents = await (await fetch('/api/agents')).json();
+  } catch { agents = {}; }
+  const bar = $('#agents');
+  bar.innerHTML = '';
+  for (const [id, a] of Object.entries(agents)) {
+    const b = document.createElement('button');
+    b.textContent = a.name || id.toUpperCase();
+    if (!a.terminal) { b.disabled = true; b.title = 'headless agent — no raw keystrokes'; }
+    b.classList.toggle('on', id === target);
+    b.addEventListener('click', () => connect(id));
+    bar.appendChild(b);
+  }
+  // If the remembered target vanished (or is not a terminal), fall back to the
+  // first terminal agent; if nothing connected yet (no remembered target), do it now.
+  if (!agents[target]?.terminal) {
+    const first = Object.entries(agents).find(([, a]) => a.terminal);
+    if (first && first[0] !== target) connect(first[0]);
+  }
+}
+
+/* ── websocket (send-only; terminal output stays on the iPad) ── */
+function connect(id) {
+  target = id;
+  localStorage.setItem('nexus.kb.target', id);
+  document.querySelectorAll('#agents button').forEach((b, i) => {
+    b.classList.toggle('on', Object.keys(agents)[i] === id);
+  });
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+  dot.classList.remove('on');
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/term/${id}`);
+  ws.onopen = () => {
+    dot.classList.add('on');
+    ws.send(JSON.stringify({ type: 'kb' })); // declare keyboard client: hub stops sending PTY output, counts us as connected
+  };
+  ws.onclose = () => {
+    dot.classList.remove('on');
+    if (target === id) setTimeout(() => { if (target === id) connect(id); }, 2000);
+  };
+  ws.onerror = () => {};
+}
+
+function send(data) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'in', data }));
+}
+
+/* ── text forwarding (IME-aware) ──
+   During CJK composition nothing is sent; the committed text goes on
+   compositionend. Otherwise every input event is diffed against the last
+   known value and the delta (insertions / backspaces) is forwarded. */
+let last = '', composing = false;
+
+function autoGrow() {
+  input.style.height = 'auto';
+  input.style.height = input.scrollHeight + 'px';
+}
+
+function flush() {
+  const v = input.value;
+  let i = 0;
+  while (i < last.length && i < v.length && last[i] === v[i]) i++;
+  const del = last.length - i;
+  const ins = v.slice(i);
+  if (del) send('\x7f'.repeat(del));
+  if (ins) send(ins);
+  last = v;
+  autoGrow();
+}
+
+input.addEventListener('compositionstart', () => { composing = true; });
+input.addEventListener('compositionend', () => { composing = false; flush(); });
+input.addEventListener('input', () => { if (!composing) flush(); else autoGrow(); });
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !composing) {
+    e.preventDefault();
+    flush(); // push any unflushed text first
+    send('\r');
+    input.value = ''; last = ''; autoGrow();
+  } else if (e.key === 'Backspace' && !input.value && !composing) {
+    e.preventDefault();
+    send('\x7f'); // field empty but terminal line may not be
+  }
+});
+
+/* ── keyboard avoidance ──
+   Pin the body to the visual viewport (iOS neither shrinks the layout viewport
+   nor refrains from scrolling when the software keyboard opens). The header
+   and agent tabs are counter-translated by the scroll offset so they stay
+   glued to the visible top; input + keys land exactly above the keyboard. */
+const hdr = document.querySelector('header'), tabs = $('#agents');
+const vv = window.visualViewport;
+if (vv) {
+  const pin = () => {
+    document.body.style.height = `${vv.height + vv.offsetTop}px`;
+    const y = vv.offsetTop;
+    hdr.style.transform = y ? `translateY(${y}px)` : '';
+    tabs.style.transform = y ? `translateY(${y}px)` : '';
+  };
+  vv.addEventListener('resize', pin);
+  vv.addEventListener('scroll', pin);
+  pin();
+}
+
+/* ── boot ── */
+target = localStorage.getItem('nexus.kb.target');
+if (target) connect(target); // don't wait for the agents fetch — WS handshake is the slowest step
+loadAgents();
+autoGrow();
+</script>
+</body>
+</html>

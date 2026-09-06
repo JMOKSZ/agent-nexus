@@ -68,6 +68,8 @@ termManager.configure(agentsList.filter((a) => a.terminal).map((a) => {
   args.push(...splitArgs(cfg.extraArgs));
   return { id: a.id, cmd: a.cmd || a.id, args, cwd: a.cwd };
 }));
+// Remote-keyboard connect/disconnect → SSE so every client can show kb status.
+termManager.onKbChange = () => hub.emit('kb', termManager.kbCounts());
 
 const wss = new WebSocketServer({ noServer: true });
 
@@ -81,6 +83,7 @@ const snapshotWithModels = () => {
   const snap = hub.snapshot();
   snap.agents = Object.fromEntries(Object.entries(snap.agents).map(([id, a]) =>
     [id, { ...a, model: getAgentCfg(id).model || (claudeIds.has(id) ? realClaude : '') }]));
+  snap.kb = termManager.kbCounts(); // remote-keyboard clients per agent
   return snap;
 };
 
@@ -422,6 +425,7 @@ server.on('upgrade', (req, socket, head) => {
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (msg.type === 'in' && typeof msg.data === 'string') term.write(msg.data.slice(0, 64_000));
       else if (msg.type === 'resize') term.resize(Number(msg.cols), Number(msg.rows));
+      else if (msg.type === 'kb') term.markKb(ws); // remote keyboard: input-only client
     });
     ws.on('close', () => term.detach(ws));
   });

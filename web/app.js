@@ -197,6 +197,7 @@ function attachTouchScroll(id, term, host) {
 // pointerdown + preventDefault so tapping them never steals terminal focus
 // (which would collapse the iPad software keyboard).
 const kbState = { ctrl: false, shift: false, focused: null };
+let kbCounts = {}; // agentId -> remote-keyboard (iPhone) client count, from SSE
 
 const KB_ROWS = [
   [
@@ -210,9 +211,8 @@ const KB_ROWS = [
     { label: '→', seq: '\x1b[C', cseq: '\x1b[1;5C', sseq: '\x1b[1;2C', csseq: '\x1b[1;6C' },
   ],
   [
+    { label: '⏎', seq: '\r', title: 'Enter' },
     { label: '^C', seq: '\x03', title: 'Ctrl+C — interrupt' },
-    { label: '^D', seq: '\x04', title: 'Ctrl+D — EOF' },
-    { label: '^Z', seq: '\x1a', title: 'Ctrl+Z — suspend' },
     { label: '^V', seq: '\x16', title: 'Ctrl+V — paste' },
     { label: '⇧TAB', seq: '\x1b[Z', title: 'Shift+Tab — cycle Claude Code modes' },
     { label: 'HOME', seq: '\x1b[H', sseq: '\x1b[1;2H' },
@@ -283,7 +283,8 @@ function buildKeybar() {
     `<div class="kb-row">${row.map((k) =>
       `<button class="kb-key${k.latch ? ' kb-latch' : ''}"${k.latch ? ` data-latch="${k.latch}"` : ''} tabindex="-1"${k.title ? ` title="${k.title}"` : ''}>${k.label}</button>`
     ).join('')}</div>`
-  ).join('') + '<button class="kb-key kb-hide" tabindex="-1" title="Hide soft keyboard">✕</button>';
+  ).join('') + '<button class="kb-key kb-phone" tabindex="-1" title="Use iPhone as a remote keyboard">📱</button>'
+    + '<button class="kb-key kb-hide" tabindex="-1" title="Hide soft keyboard">✕</button>';
 
   bar.querySelectorAll('.kb-row').forEach((rowEl, r) => {
     rowEl.querySelectorAll('.kb-key').forEach((btn, c) => {
@@ -307,6 +308,11 @@ function buildKeybar() {
     kbSetCtrl(false);
     kbSetShift(false);
     kbShow(false);
+  });
+  bar.querySelector('.kb-phone').addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation(); // keep the popover's own outside-tap dismiss from instantly closing it
+    kbPhonePopover();
   });
 
   $('#kb-pill').addEventListener('click', () => kbShow(true));
@@ -333,6 +339,46 @@ function buildKeybar() {
     vv.addEventListener('resize', lift);
     vv.addEventListener('scroll', lift);
   }
+}
+
+/* ── iPhone-as-keyboard: 📱 reflects live connection state (hub broadcasts
+   kb client counts over SSE); the popover carries the setup URL + status ── */
+function kbPhoneUpdate() {
+  const entries = Object.entries(kbCounts);
+  const on = entries.length > 0;
+  $('#keybar .kb-phone')?.classList.toggle('kb-on', on);
+  const st = $('#kb-phone-pop .kb-pop-status');
+  if (st) {
+    st.textContent = on
+      ? `● iPhone 键盘已连接（${entries.map(([id, n]) => `${id}×${n}`).join('、')}）`
+      : '○ iPhone 键盘未连接';
+    st.classList.toggle('on', on);
+  }
+}
+
+function kbPhonePopover() {
+  let pop = $('#kb-phone-pop');
+  if (pop) { pop.hidden = !pop.hidden; return; }
+  const url = `${location.origin}/kb.html`;
+  pop = document.createElement('div');
+  pop.id = 'kb-phone-pop';
+  pop.innerHTML = `
+    <div class="kb-pop-title">📱 iPhone 作为键盘</div>
+    <div class="kb-pop-status"></div>
+    <div class="kb-pop-url">${url}</div>
+    <div class="kb-pop-hint">iPhone 开 Tailscale，Safari 打开上面的地址（可「添加到主屏幕」）。在 iPhone 上打字会即时键入这里选中的终端窗口。</div>
+    <button class="kb-pop-copy">复制链接</button>`;
+  document.body.appendChild(pop);
+  kbPhoneUpdate();
+  pop.querySelector('.kb-pop-copy').addEventListener('click', async (e) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      e.target.textContent = '已复制 ✓';
+    } catch { /* clipboard unavailable (non-secure context) */ }
+  });
+  document.addEventListener('pointerdown', (e) => {
+    if (!pop.hidden && !pop.contains(e.target)) pop.hidden = true;
+  });
 }
 
 function kbShow(on, init) {
@@ -795,6 +841,8 @@ function connect() {
     const snap = JSON.parse(e.data);
     buildDeck(snap.agents);
     buildChips();
+    kbCounts = snap.kb || {};
+    kbPhoneUpdate();
     for (const [id, a] of Object.entries(snap.agents)) renderStatus({ agent: id, ...a });
     $('#feed').innerHTML = '';
     state.feedCount = 0;
@@ -824,6 +872,7 @@ function connect() {
   es.addEventListener('delta-start', (e) => deltaStart(JSON.parse(e.data)));
   es.addEventListener('delta', (e) => delta(JSON.parse(e.data)));
   es.addEventListener('delta-end', (e) => deltaEnd(JSON.parse(e.data)));
+  es.addEventListener('kb', (e) => { kbCounts = JSON.parse(e.data); kbPhoneUpdate(); });
   es.onerror = () => setConn(false);
   es.onopen = () => setConn(true);
 }
