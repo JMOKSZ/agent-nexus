@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
@@ -90,17 +90,17 @@ header {
 <body>
 <header>
   <div class="brand">NEXUS <span>⌨ KEYBOARD</span></div>
-  <button id="gear" title="皮肤">⚙</button>
+  <button id="gear" title="Theme">⚙</button>
   <div class="dot" id="dot"></div>
   <div id="theme-menu" hidden>
-    <button data-t="light">明亮</button>
-    <button data-t="dark">暗黑</button>
+    <button data-t="light">Light</button>
+    <button data-t="dark">Dark</button>
   </div>
 </header>
 <div id="agents"></div>
 <div id="input-row">
-  <textarea id="kb-in" rows="2" placeholder="打字即键入所选终端；回车换行，⏎ 发送" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="enter"></textarea>
-  <button id="up-btn" title="上传文件到终端">📎</button>
+  <textarea id="kb-in" rows="2" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="enter"></textarea>
+  <button id="up-btn" title="Upload file to terminal">📎</button>
   <input type="file" id="file-input" hidden>
 </div>
 <div id="keys"></div>
