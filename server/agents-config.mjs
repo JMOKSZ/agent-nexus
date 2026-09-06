@@ -13,7 +13,12 @@ import { fileURLToPath } from 'node:url';
 // shared nexus workdir); resumed sessions keep their own origin cwd.
 
 const USER_FILE = process.env.NEXUS_AGENTS_FILE || join(homedir(), '.agent-nexus', 'agents.json');
-const EXAMPLE_FILE = join(dirname(fileURLToPath(import.meta.url)), '..', 'agents.example.json');
+const REPO_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
+const EXAMPLE_FILE = join(REPO_DIR, 'agents.example.json');
+
+// "@repo/..." in args resolves into this repo, so the roster can reference
+// bundled files (e.g. config/mcp-none.json) portably across machines.
+const expandRepoArg = (s) => (s.startsWith('@repo/') ? join(REPO_DIR, s.slice(6)) : s);
 
 function parseCwd(v) {
   if (typeof v !== 'string' || !v.trim()) return undefined;
@@ -43,7 +48,7 @@ export function loadAgentsConfig() {
       cwd: parseCwd(a.cwd),
       terminal: a.terminal === true, // run as a persistent interactive PTY instead of headless one-shot
       cmd: typeof a.cmd === 'string' && /^[\w./+-]{1,80}$/.test(a.cmd) ? a.cmd : undefined,
-      args: Array.isArray(a.args) ? a.args.filter((s) => typeof s === 'string' && /^[\w./+:=@-]{1,80}$/.test(s)).slice(0, 16) : undefined,
+      args: Array.isArray(a.args) ? a.args.filter((s) => typeof s === 'string' && /^[\w./+:=@-]{1,80}$/.test(s)).slice(0, 16).map(expandRepoArg) : undefined,
       ctxChars: Number.isFinite(Number(a.ctxChars)) ? Math.min(4000, Math.max(0, Math.round(Number(a.ctxChars)))) : undefined,
     });
   }

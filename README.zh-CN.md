@@ -21,6 +21,7 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 - **会话管理** — 恢复历史会话（`@claude /sessions`、`/resume <前缀>`），per-agent 会话跨重启续接
 - **附件** — 拖拽 / 粘贴 / 📎 上传文件、图片、音频、视频（≤50MB）；Codex 以真视觉输入接收图片
 - **三套马卡龙主题** — CYBER / LIGHT / DARK，Ghostty 式聚焦窗口半透明，可安装为 PWA / Mac Dock 应用
+- **iPhone 遥控键盘** — `/kb.html` 把手机变成任意终端窗口的纯输入键盘：IME 感知按键转发、agent 切换、TUI 快捷键、📎 文件上传（路径直接键入终端草稿）；软键盘上的 📱 提供设置链接，手机连上时自动高亮
 - **iPad 与手机适配** — 终端纵向堆叠，UPLINK FEED 变为滑出抽屉
 
 ## 要求
@@ -99,7 +100,8 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
     "modelHint": "claude-sonnet-4-6 (empty = default)",
     "ctxChars": 900,
     "cwd": "~",
-    "terminal": true
+    "terminal": true,
+    "args": ["--strict-mcp-config", "--mcp-config", "@repo/config/mcp-none.json"]
   }
 ]
 ```
@@ -115,13 +117,14 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | `ctxChars` | | 共享记忆注入预算字符数（0 = 关闭，默认 900） |
 | `cwd` | | agent 进程的工作目录 |
 | `terminal` | | 嵌入真实交互式 TUI，而不是无头单次运行 |
-| `cmd` / `args` | | 仅终端模式：要启动的命令/参数（默认用 agent id + 设置面板的 `--model`/`extraArgs`）。显式 `args` 会取代 `--model` 约定——例如 `["tui", "--session", "nexus"]` 对应 `openclaw tui` |
+| `cmd` / `args` | | 仅终端模式：要启动的命令/参数（默认用 agent id + 设置面板的 `--model`/`extraArgs`）。显式 `args` 会取代 `--model` 约定——例如 `["tui", "--session", "nexus"]` 对应 `openclaw tui`。args 中的 `@repo/...` 会解析为仓库目录，阵容可以跨机器引用仓库自带文件——例如随附的 `config/mcp-none.json`，让 Claude Code 不加载任何 MCP server、显著加快首次渲染 |
 | `distiller` | | 指定该 agent 执行 `/distill` 蒸馏（默认选第一个无会话 adapter） |
 
 - 想少放几个：删掉对应数组项即可。想加同类型第二个实例：加一个不同 `id` 的条目。
 - 非法 id、未知 adapter 类型的条目会被跳过并在日志里告警。
 - 环境变量 `NEXUS_AGENTS_FILE` 可指定其他路径的阵容文件。
 - 修改后 `bin/nexus restart` 生效。
+- 提示：在 claude 的 args 末尾加 `"--continue"` 可在窗口重启时自动续接最近一次会话（全新安装时不要加——还没有会话时 claude 会报错退出）。
 
 其他所有配置——每个 agent 的模型与附加 CLI 参数、主题、聚焦透明度——都在右上角 **⚙ 设置** 面板里实时调整（存于 `~/.agent-nexus/settings.json`）。
 
@@ -138,6 +141,15 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 
 斜杠命令——hub 层（随处可用）：`/remember` `/forget` `/memories` `/distill` `/clearall`。
 agent 层（需 `@agent` 前缀）：claude 与 codex 支持 `/sessions` `/resume <前缀>` `/fork` `/status` `/clear` `/stop`；dsh 与 openclaw 支持 `/status` `/clear` `/stop`；hermes 支持 `/sessions` `/resume <前缀>` `/status` `/clear` `/stop`。真终端窗口里斜杠命令会直接打进 TUI。
+
+## iPhone 遥控键盘
+
+在 iPad 上往终端里打字太局促——让 iPhone 当键盘。在 iPad（或 Mac）上打开 deck，点软键盘上的 **📱**：弹层会给出手机访问地址和实时连接状态。在手机上打开该地址（经 Tailscale Serve 为 `https://<机器名>.<tailnet>.ts.net:8443/kb.html`，见下文；可添加到主屏幕一键直达）。
+
+- 手机上打字会逐键转发进选中的终端窗口——IME 感知：中文等输入法组字完成后整段提交，不会变成字母流
+- 顶部 agent 标签选择输入目标窗口；ESC / ← ↑ ↓ → / ⏎ 覆盖 TUI 导航
+- 📎 上传文件（≤50MB）并把路径直接键入终端草稿——补上指令后按 ⏎ 发送
+- 手机是纯输入客户端：不接收任何终端输出，不会给已繁忙的会话增加负担。手机连上后 deck 上的 📱 键会高亮，弹层里还能看到各窗口挂载了几台手机
 
 ## Agent 互调
 
@@ -188,7 +200,8 @@ server/
   runner.mjs           # CLI spawn 封装（超时/逐行回调）
   settings.mjs         # 设置持久化
   adapters/            # claude / codex / dsh / openclaw / hermes 适配器 + 注册表
-web/                   # 零构建 vanilla JS + 手写 CSS，PWA
+web/                   # 零构建 vanilla JS + 手写 CSS，PWA（index.html + kb.html 手机键盘）
+config/                # 供 @repo/ args 引用的随附配置（mcp-none.json = 无 MCP 的 claude 启动）
 bin/install.mjs        # 交互式安装程序
 bin/nexus              # 服务控制 + agent 调度 CLI
 launchd/               # plist 模板

@@ -8,7 +8,8 @@
     "modelHint": "claude-sonnet-4-6 (empty = default)",
     "ctxChars": 900,
     "cwd": "~",
-    "terminal": true
+    "terminal": true,
+    "args": ["--strict-mcp-config", "--mcp-config", "@repo/config/mcp-none.json"]
   },
   {
     "id": "codex",

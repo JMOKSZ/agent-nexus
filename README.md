@@ -21,6 +21,7 @@ English | [中文](README.zh-CN.md)
 - **Sessions** — resume past conversations (`@claude /sessions`, `/resume <prefix>`), per-agent session continuity across restarts
 - **Attachments** — drag / paste / 📎 files, images, audio, video up to 50 MB; Codex receives images as real vision input
 - **Three macaron themes** — CYBER / LIGHT / DARK, Ghostty-style focus-mode translucency, installable as a PWA / Mac dock app
+- **iPhone as a remote keyboard** — `/kb.html` turns a phone into a send-only keyboard for any terminal window: IME-aware keystroke forwarding, agent tabs, TUI special keys, and 📎 file upload (path typed straight into the terminal draft); the keybar's 📱 shows the setup link and glows while a phone is connected
 - **iPad & phone ready** — terminals stack, the uplink feed becomes a slide-in drawer
 
 ## Requirements
@@ -99,7 +100,8 @@ Day-to-day control: `bin/nexus start | stop | restart | logs` — logs live at `
     "modelHint": "claude-sonnet-4-6 (empty = default)",
     "ctxChars": 900,
     "cwd": "~",
-    "terminal": true
+    "terminal": true,
+    "args": ["--strict-mcp-config", "--mcp-config", "@repo/config/mcp-none.json"]
   }
 ]
 ```
@@ -115,13 +117,14 @@ Day-to-day control: `bin/nexus start | stop | restart | logs` — logs live at `
 | `ctxChars` | | Shared-memory injection budget (0 = off, default 900) |
 | `cwd` | | Working directory for the agent process |
 | `terminal` | | Embed a real interactive TUI instead of headless runs |
-| `cmd` / `args` | | Terminal mode only: command/args to spawn (default: agent id + `--model`/`extraArgs` from Settings). Explicit `args` replace the `--model` convention — e.g. `["tui", "--session", "nexus"]` for `openclaw tui` |
+| `cmd` / `args` | | Terminal mode only: command/args to spawn (default: agent id + `--model`/`extraArgs` from Settings). Explicit `args` replace the `--model` convention — e.g. `["tui", "--session", "nexus"]` for `openclaw tui`. `@repo/...` in args resolves into the repo directory, so a roster can reference bundled files portably — e.g. the shipped `config/mcp-none.json`, which starts Claude Code with no MCP servers for a much faster first paint |
 | `distiller` | | This agent runs `/distill` jobs (default: first non-session adapter) |
 
 - Fewer agents: delete entries. More of the same type: add an entry with a new `id`.
 - Invalid ids or unknown adapters are skipped with a log warning.
 - `NEXUS_AGENTS_FILE` points at a different roster file.
 - Apply changes with `bin/nexus restart`.
+- Tip: append `"--continue"` to claude's args to auto-resume the latest session whenever the window respawns (drop it on a fresh install — claude errors if no session exists yet).
 
 Everything else — per-agent model & extra CLI args, theme, focus opacity — is set live from the **⚙ Settings** panel (stored in `~/.agent-nexus/settings.json`).
 
@@ -138,6 +141,15 @@ Everything else — per-agent model & extra CLI args, theme, focus opacity — i
 
 Slash commands — hub-level (work anywhere): `/remember` `/forget` `/memories` `/distill` `/clearall`.
 Agent-level (prefix with `@agent`): claude & codex support `/sessions` `/resume <prefix>` `/fork` `/status` `/clear` `/stop`; dsh & openclaw support `/status` `/clear` `/stop`; hermes supports `/sessions` `/resume <prefix>` `/status` `/clear` `/stop`. In terminal windows, slash commands are typed straight into the TUI.
+
+## iPhone as a remote keyboard
+
+Typing into a terminal on an iPad is cramped — let your iPhone be the keyboard. With the deck open on the iPad (or Mac), tap **📱** on the soft keybar: the popover shows the phone URL and a live connection status. Open that URL on the phone (`https://<machine>.<tailnet>.ts.net:8443/kb.html` via Tailscale Serve — see below; add it to the Home Screen for one-tap access).
+
+- Keystrokes are forwarded into the selected terminal window as you type — IME-aware, so CJK composition commits as one chunk instead of letter soup
+- Agent tabs choose which terminal receives input; ESC / ← ↑ ↓ → / ⏎ cover TUI navigation
+- 📎 uploads a file (≤ 50 MB) and types its path into the terminal draft — add instructions, hit ⏎
+- The phone is an input-only client: it receives no terminal output, so it adds no load to an already-busy session. The 📱 key on the deck glows while a phone is connected, and its popover shows which windows have phones attached
 
 ## Agent-to-agent dispatch
 
@@ -188,7 +200,8 @@ server/
   runner.mjs           # CLI spawn wrapper (timeout / line callbacks)
   settings.mjs         # settings persistence
   adapters/            # claude / codex / dsh / openclaw / hermes + registry
-web/                   # zero-build vanilla JS + hand-written CSS, PWA
+web/                   # zero-build vanilla JS + hand-written CSS, PWA (index.html + kb.html phone keyboard)
+config/                # bundled config snippets for @repo/ args (mcp-none.json = MCP-free claude start)
 bin/install.mjs        # interactive installer
 bin/nexus              # service control + agent dispatch CLI
 launchd/               # plist template
