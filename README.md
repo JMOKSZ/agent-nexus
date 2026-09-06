@@ -147,7 +147,7 @@ Agent-level (prefix with `@agent`): claude & codex support `/sessions` `/resume 
 Typing into a terminal on an iPad is cramped — let your iPhone be the keyboard. With the deck open on the iPad (or Mac), tap **📱** on the soft keybar: the popover shows the phone URL and a live connection status. Open that URL on the phone (`https://<machine>.<tailnet>.ts.net:8443/kb.html` via Tailscale Serve — see below; add it to the Home Screen for one-tap access).
 
 - Keystrokes are forwarded into the selected terminal window as you type — IME-aware, so CJK composition commits as one chunk instead of letter soup
-- Agent tabs choose which terminal receives input; ESC / ← ↑ ↓ → / ⏎ cover TUI navigation
+- Agent tabs choose which terminal receives input; soft-keyboard return types a newline into the TUI draft, the fixed ⏎ key submits, and ESC / arrows cover TUI navigation
 - 📎 uploads a file (≤ 50 MB) and types its path into the terminal draft — add instructions, hit ⏎
 - The phone is an input-only client: it receives no terminal output, so it adds no load to an already-busy session. The 📱 key on the deck glows while a phone is connected, and its popover shows which windows have phones attached
 
