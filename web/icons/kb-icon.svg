@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232541"/>
+      <stop offset="1" stop-color="#141523"/>
+    </linearGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" fill="none" stroke="#00f0ff" stroke-opacity="0.05" stroke-width="2"/>
+    </pattern>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="228" fill="url(#bg)"/>
+  <rect width="1024" height="1024" rx="228" fill="url(#grid)"/>
+
+  <!-- glow layer -->
+  <g fill="none" stroke="#00f0ff" stroke-width="30" filter="url(#glow)" opacity="0.8">
+    <rect x="137" y="227" width="170" height="170" rx="38"/>
+    <rect x="330" y="227" width="170" height="170" rx="38"/>
+    <rect x="523" y="227" width="170" height="170" rx="38"/>
+    <rect x="716" y="227" width="170" height="170" rx="38"/>
+    <rect x="137" y="427" width="170" height="170" rx="38"/>
+    <rect x="330" y="427" width="170" height="170" rx="38"/>
+    <rect x="523" y="427" width="170" height="170" rx="38"/>
+    <rect x="716" y="427" width="170" height="170" rx="38"/>
+    <rect x="137" y="627" width="400" height="170" rx="38"/>
+    <rect x="560" y="627" width="326" height="170" rx="38"/>
+  </g>
+
+  <!-- crisp keys -->
+  <g fill="none" stroke="#a8fbff" stroke-width="18">
+    <rect x="137" y="227" width="170" height="170" rx="38"/>
+    <rect x="330" y="227" width="170" height="170" rx="38"/>
+    <rect x="523" y="227" width="170" height="170" rx="38"/>
+    <rect x="716" y="227" width="170" height="170" rx="38"/>
+    <rect x="137" y="427" width="170" height="170" rx="38"/>
+    <rect x="330" y="427" width="170" height="170" rx="38"/>
+    <rect x="523" y="427" width="170" height="170" rx="38"/>
+    <rect x="716" y="427" width="170" height="170" rx="38"/>
+    <rect x="137" y="627" width="400" height="170" rx="38"/>
+  </g>
+
+  <!-- enter key -->
+  <rect x="560" y="627" width="326" height="170" rx="38" fill="#00f0ff"/>
+  <g fill="none" stroke="#062a30" stroke-width="24" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 762 672 V 712 A 24 24 0 0 1 738 736 H 654"/>
+    <path d="M 684 706 L 648 736 L 684 766"/>
+  </g>
+</svg>
