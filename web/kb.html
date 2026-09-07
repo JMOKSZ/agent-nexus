@@ -12,13 +12,11 @@
 <style>
 :root {
   --bg: #f2f4f9; --panel: #ffffff; --line: #d5dae5; --text: #1c2233;
-  --dim: #67707f; --accent: #0891b2; --ok: #16a34a; --bad: #dc2626;
-  --on-accent: #ffffff;
+  --dim: #67707f; --accent: #7a96b4; --ok: #16a34a; --bad: #dc2626;
 }
 [data-theme="dark"] {
   --bg: #0d0e1a; --panel: #171827; --line: #2a2c44; --text: #d6d8f0;
-  --dim: #7a7da0; --accent: #00f0ff; --ok: #7cff4f; --bad: #ff5f6b;
-  --on-accent: #04222a;
+  --dim: #7a7da0; --accent: #7a96b4; --ok: #7cff4f; --bad: #ff5f6b;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; height: 100%; }
@@ -68,7 +66,6 @@ header {
   color: var(--text); background: transparent; border: none;
   border-radius: 0; outline: none; resize: none;
 }
-#kb-in::placeholder { color: var(--dim); opacity: .6; }
 #up-btn {
   flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; font-size: 19px;
   border: 1px solid var(--line); background: var(--panel); color: var(--dim);
@@ -84,7 +81,8 @@ header {
   border: 1px solid var(--line); background: var(--panel); color: var(--text);
 }
 #keys button:active { background: var(--line); }
-#keys .enter { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+#keys .enter { background: var(--accent); border-color: var(--accent); color: #ffffff; font-weight: 700; }
+#keys .enter svg { width: 18px; height: 18px; vertical-align: -3px; }
 </style>
 </head>
 <body>
@@ -110,7 +108,7 @@ header {
 const $ = (s) => document.querySelector(s);
 const input = $('#kb-in'), dot = $('#dot');
 
-let ws = null, target = null, agents = {};
+let ws = null, target = null, agents = {}, mode = 'term';
 
 /* ── special keys ── */
 const KEYS = [
@@ -119,19 +117,42 @@ const KEYS = [
   { label: '↑', seq: '\x1b[A' },
   { label: '↓', seq: '\x1b[B' },
   { label: '→', seq: '\x1b[C' },
-  { label: '⏎', seq: '\r', cls: 'enter' },
+  { seq: '\r', cls: 'enter', svg: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M9.04 15.31l-.38 4.24c.55 0 .79-.24 1.08-.52l2.59-2.48 5.37 3.96c.98.54 1.68.26 1.96-.9l3.55-16.62c.31-1.46-.53-2.04-1.48-1.68L1.18 9.13c-1.44.56-1.42 1.36-.25 1.72l5.47 1.71L19.1 5.61c.6-.39 1.12-.18.68.21L9.04 15.31z"/></svg>' },
 ];
 const keysEl = $('#keys');
 for (const k of KEYS) {
   const b = document.createElement('button');
-  b.textContent = k.label;
+  if (k.svg) b.innerHTML = k.svg;
+  else b.textContent = k.label;
   if (k.cls) b.className = k.cls;
   b.addEventListener('pointerdown', (e) => {
     e.preventDefault(); // keep software keyboard open
-    if (k.seq === '\r') { flush(); send('\r'); input.value = ''; last = ''; autoGrow(); }
-    else send(k.seq);
+    if (k.seq === '\r') {
+      if (mode === 'term') { flush(); send('\r'); input.value = ''; last = ''; autoGrow(); }
+      else sendMessage();
+    }
+    else if (mode === 'term') send(k.seq);
   });
   keysEl.appendChild(b);
+}
+
+/* ── two modes: term = raw keystrokes into the PTY; msg = whole text via /api/send ── */
+function updateModeUI() {
+  keysEl.querySelectorAll('button:not(.enter)').forEach((b) => {
+    b.style.display = mode === 'term' ? '' : 'none'; // ESC/arrows are meaningless without a PTY
+  });
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || !target) return;
+  input.value = ''; last = '';
+  try {
+    await fetch('/api/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: `@${target} ${text}` }),
+    });
+  } catch {}
 }
 
 /* ── file upload → hub uploads dir, path typed into the terminal draft ── */
@@ -164,7 +185,7 @@ fileInput.addEventListener('change', async () => {
   setTimeout(() => { upBtn.textContent = '📎'; }, 1500);
 });
 
-/* ── agent picker (terminal agents only — they accept raw keystrokes) ── */
+/* ── agent picker: terminal agents take raw keystrokes; the rest get messages ── */
 async function loadAgents() {
   try {
     agents = await (await fetch('/api/agents')).json();
@@ -174,16 +195,18 @@ async function loadAgents() {
   for (const [id, a] of Object.entries(agents)) {
     const b = document.createElement('button');
     b.textContent = a.name || id.toUpperCase();
-    if (!a.terminal) { b.disabled = true; b.title = 'headless agent — no raw keystrokes'; }
+    b.title = a.terminal ? 'terminal — live keystrokes' : 'headless — text sent as a message';
     b.classList.toggle('on', id === target);
     b.addEventListener('click', () => connect(id));
     bar.appendChild(b);
   }
-  // If the remembered target vanished (or is not a terminal), fall back to the
-  // first terminal agent; if nothing connected yet (no remembered target), do it now.
-  if (!agents[target]?.terminal) {
-    const first = Object.entries(agents).find(([, a]) => a.terminal);
-    if (first && first[0] !== target) connect(first[0]);
+  if (!agents[target]) {
+    const first = Object.keys(agents)[0];
+    if (first && first !== target) connect(first);
+  } else if (!!agents[target].terminal !== (mode === 'term')) {
+    connect(target); // config arrived and disagrees with the boot-time guess
+  } else {
+    updateModeUI();
   }
 }
 
@@ -194,19 +217,27 @@ function connect(id) {
   document.querySelectorAll('#agents button').forEach((b, i) => {
     b.classList.toggle('on', Object.keys(agents)[i] === id);
   });
-  if (ws) { try { ws.close(); } catch {} ws = null; }
+  const old = ws; ws = null;
+  if (old) { try { old.close(); } catch {} }
   dot.classList.remove('on');
+  // Before the agents config arrives we can't know the type — guess terminal
+  // (the WS handshake is the slowest step, worth starting early); loadAgents
+  // re-runs connect() if the guess was wrong.
+  mode = agents[id] && !agents[id].terminal ? 'msg' : 'term';
+  updateModeUI();
+  if (mode === 'msg') return;
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws/term/${id}`);
-  ws.onopen = () => {
+  const sock = new WebSocket(`${proto}://${location.host}/ws/term/${id}`);
+  ws = sock;
+  sock.onopen = () => {
     dot.classList.add('on');
-    ws.send(JSON.stringify({ type: 'kb' })); // declare keyboard client: hub stops sending PTY output, counts us as connected
+    sock.send(JSON.stringify({ type: 'kb' })); // declare keyboard client: hub stops sending PTY output, counts us as connected
   };
-  ws.onclose = () => {
+  sock.onclose = () => {
     dot.classList.remove('on');
-    if (target === id) setTimeout(() => { if (target === id) connect(id); }, 2000);
+    if (ws === sock && target === id) setTimeout(() => { if (ws === sock && target === id) connect(id); }, 2000);
   };
-  ws.onerror = () => {};
+  sock.onerror = () => {};
 }
 
 function send(data) {
@@ -236,10 +267,13 @@ function flush() {
 }
 
 input.addEventListener('compositionstart', () => { composing = true; });
-input.addEventListener('compositionend', () => { composing = false; flush(); });
-input.addEventListener('input', () => { if (!composing) flush(); else autoGrow(); });
+input.addEventListener('compositionend', () => { composing = false; if (mode === 'term') flush(); });
+input.addEventListener('input', () => {
+  if (mode !== 'term') return; // msg mode: text stays local until ⏎
+  if (!composing) flush(); else autoGrow();
+});
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Backspace' && !input.value && !composing) {
+  if (mode === 'term' && e.key === 'Backspace' && !input.value && !composing) {
     e.preventDefault();
     send('\x7f'); // field empty but terminal line may not be
   }
