@@ -4,6 +4,7 @@
     "name": "CLAUDE",
     "color": "#00f0ff",
     "desc": "Claude Code CLI",
+    "routeDesc": "Software development: writing code, code review, debugging, architecture",
     "adapter": "claude",
     "modelHint": "claude-sonnet-4-6 (empty = default)",
     "ctxChars": 900,
@@ -16,6 +17,7 @@
     "name": "CODEX",
     "color": "#ff2fd6",
     "desc": "Codex CLI",
+    "routeDesc": "Backup coding agent; only takes tasks that explicitly name codex",
     "adapter": "codex",
     "modelHint": "deepseek-v4-flash (empty = default)",
     "ctxChars": 900
@@ -25,6 +27,7 @@
     "name": "DEEPSEEK",
     "color": "#7cff4f",
     "desc": "DSH · headless harness",
+    "routeDesc": "Office/chat ops: sending messages, group notices, docs, calendar, meeting notes",
     "adapter": "dsh",
     "modelHint": "(dsh has no model flag; only extra args apply)",
     "ctxChars": 1800
@@ -34,6 +37,7 @@
     "name": "OPENCLAW",
     "color": "#b78bff",
     "desc": "OpenClaw · local gateway",
+    "routeDesc": "General bash ops and chores: servers, file management, lookups, scripts, maintenance",
     "adapter": "openclaw",
     "modelHint": "zhipu/glm-5.2 (empty = default)",
     "ctxChars": 700

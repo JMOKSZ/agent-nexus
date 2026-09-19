@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logEvent, addMemory, retireMemory, listMemories, buildContextBlock, normalizeKind, eventsSince, getMeta, setMeta } from './memory.mjs';
+import { routerStatus, setRouterEnabled, routeTask } from './router.mjs';
 import { getAgentCfg } from './settings.mjs';
 import { termManager } from './terminal.mjs';
 import { attachmentNote } from './runner.mjs';
@@ -11,7 +12,7 @@ const STATE_DIR = join(homedir(), '.agent-nexus');
 const STATE_FILE = join(STATE_DIR, 'state.json');
 const MAX_HISTORY = 300;
 const MAX_DISPATCH_DEPTH = 4;
-const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill', 'clearall']);
+const HUB_COMMANDS = new Set(['remember', 'forget', 'memories', 'distill', 'clearall', 'router']);
 
 const DISTILL_PROMPT = `你是 NEXUS 多 agent 系统的记忆蒸馏器。下面是系统近期的事件日志（用户与各 agent 的交互记录）。
 请提炼出值得长期记住的信息，每条一行，严格使用以下格式（除此以外不要输出任何内容）：
@@ -31,7 +32,7 @@ MEMO[task]: 进行中的任务状态或结论
 export class Hub {
   constructor(adapters, agentsList) {
     this.adapters = adapters;
-    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, modelHint: a.modelHint, cwd: a.cwd, terminal: a.terminal === true }]));
+    this.agents = Object.fromEntries(agentsList.map((a) => [a.id, { name: a.name, color: a.color, desc: a.desc, routeDesc: a.routeDesc, modelHint: a.modelHint, cwd: a.cwd, terminal: a.terminal === true }]));
     this.terminalIds = new Set(agentsList.filter((a) => a.terminal).map((a) => a.id));
     this.agentIds = agentsList.map((a) => a.id);
     const idAlt = this.agentIds.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') || 'a^';
@@ -312,6 +313,19 @@ export class Hub {
       say('🧹 All window displays cleared (shared memory & event log are kept)');
       return;
     }
+    if (cmd === 'router') {
+      const st = routerStatus();
+      if (args === 'on' || args === 'off') {
+        if (!st.configured) { say('🧭 router not configured: no API key (~/.agent-nexus/router.json or TYPESAFE_API_KEY)'); return; }
+        setRouterEnabled(args === 'on');
+        say(`🧭 Jev router ${args === 'on' ? 'ON' : 'OFF'} — unmentioned messages ${args === 'on' ? `route to the best-matching agent (threshold ${st.threshold})` : 'broadcast to all agents'}`);
+        return;
+      }
+      say(st.configured
+        ? `🧭 Jev router: ${st.enabled ? 'ON' : 'OFF'} (model ${st.model}, threshold ${st.threshold}). Toggle with /router on|off`
+        : '🧭 Jev router: not configured (no API key). See ~/.agent-nexus/router.json');
+      return;
+    }
   }
 
   // Distillation job: the distiller agent (config "distiller": true, else the
@@ -390,7 +404,17 @@ export class Hub {
       this.handleCommand(to, text);
       return;
     }
-    const targets = to === 'broadcast' ? this.agentIds : [to];
+    // Unmentioned message: when the Jev router is on, pick the best-matching
+    // agent instead of broadcasting. Low confidence / "broadcast" pick / any
+    // error falls back to broadcasting to everyone.
+    if (to === 'broadcast' && !attachments.length && routerStatus().enabled) {
+      this.routeAndDispatch(text);
+      return;
+    }
+    this.dispatchTo(to === 'broadcast' ? this.agentIds : [to], text, attachments);
+  }
+
+  dispatchTo(targets, text, attachments = []) {
     for (const t of targets) {
       if (this.terminalIds.has(t)) {
         termManager.typeText(t, text + (attachments.length ? attachmentNote(attachments) : ''));
@@ -398,6 +422,24 @@ export class Hub {
       }
       this.enqueue(t, text, { from: 'user', attachments });
     }
+  }
+
+  async routeAndDispatch(text) {
+    const st = routerStatus();
+    try {
+      const r = await routeTask(text, this.agentIds.map((id) => ({ id, ...this.agents[id] })));
+      if (r && r.to !== 'broadcast' && this.adapters[r.to] && r.confidence >= st.threshold) {
+        this.pushMessage({ from: 'system', to: 'user', kind: 'memo',
+          text: `🧭 → ${this.agents[r.to].name} (jev conf ${r.confidence.toFixed(2)})` });
+        this.dispatchTo([r.to], text);
+        return;
+      }
+      if (r) {
+        this.pushMessage({ from: 'system', to: 'user', kind: 'memo',
+          text: `🧭 broadcasting (jev picked ${r.to === 'broadcast' ? 'broadcast' : this.agents[r.to]?.name || r.to}, conf ${r.confidence.toFixed(2)} < ${st.threshold})` });
+      }
+    } catch { /* router failure → broadcast silently */ }
+    this.dispatchTo(this.agentIds, text);
   }
 
   // Slash commands run immediately (outside the agent queue) and never reach

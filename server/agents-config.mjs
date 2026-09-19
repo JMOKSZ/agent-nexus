@@ -42,6 +42,7 @@ export function loadAgentsConfig() {
       name: String(a.name || id.toUpperCase()).slice(0, 24),
       color: /^#[0-9a-f]{3,8}$/i.test(a.color) ? a.color : '#888888',
       desc: String(a.desc || '').slice(0, 80),
+      routeDesc: String(a.routeDesc || '').slice(0, 160), // responsibility blurb for the Jev router
       adapter: String(a.adapter || id),
       modelHint: String(a.modelHint || ''),
       distiller: a.distiller === true,
