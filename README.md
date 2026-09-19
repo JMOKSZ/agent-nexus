@@ -8,6 +8,8 @@ NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, C
 
 English | [中文](README.zh-CN.md)
 
+> **iPad as the display, iPhone as the keyboard — from anywhere in the world, your entire team of agents back on your Mac is at your fingertips, doing the work.**
+
 ![NEXUS Command Deck](assets/screenshot-deck.png)
 
 ## Features

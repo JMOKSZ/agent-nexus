@@ -8,6 +8,8 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 
 [English](README.md) | 中文
 
+> **iPad 当显示器，iPhone 当键盘——人在世界任何角落，都能随手调遣你 Mac 上的整支 agent 小队替你干活。**
+
 ![NEXUS Command Deck](assets/screenshot-deck.png)
 
 ## 功能
