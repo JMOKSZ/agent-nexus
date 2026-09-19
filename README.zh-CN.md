@@ -2,9 +2,9 @@
 
 **一个浏览器标签页，指挥你整支本地 CLI agent 小队。**
 
-NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code、Codex、DeepSeek Harness、OpenClaw、Hermes 或你自己的——统一塞进一个赛博风 WebUI。广播或 @ 定向指令、每个 agent 独立的实时窗口、agent 之间互相调度、全队共享记忆，一应俱全。
+NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code、Codex、DeepSeek Harness、OpenClaw、Hermes 或你自己的——统一塞进一个赛博风 WebUI。广播或 @ 定向指令、每个 agent 独立的实时窗口、agent 之间互相调度、全队共享记忆，一应俱全。配上 [TypeSafe Jev](https://typesafe.ai) 的 key 后，不带 @ 的消息会由 System One 决策模型智能路由给最合适的 agent，而不是无脑广播。
 
-![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
+[![智能路由](https://img.shields.io/badge/智能路由-TypeSafe_Jev-00f0ff)](https://typesafe.ai) ![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
 
 [English](README.md) | 中文
 
@@ -16,6 +16,7 @@ NEXUS 是一个本机指挥台：把任意组合的 CLI agent——Claude Code�
 - **真终端模式** — 标记 `terminal: true` 的 agent 通过 node-pty + xterm.js 嵌入完整交互式 TUI（比如一个可以直接打字操作的完整 Claude Code 会话）；支持显式 `cmd`/`args`（如 `openclaw tui`）
 - **实时过程流** — adapter 能流式输出工作过程（不只是最终回复）：dsh adapter 监听运行中的 `dsh web` 事件流，实时渲染 CoT transcript（推理 + 工具调用），回复落地后冻结为可折叠块
 - **广播与定向** — 默认发送给全部 agent；`@claude review this diff` 定向发送；底部 chip 一键切换目标
+- **[TypeSafe Jev](https://typesafe.ai) 智能路由**（可选）— 不带 @ 的消息由 Jev（System One 决策模型，~100ms、带校准置信度）判断该交给谁并单播；置信度不足自动回退广播。见 [Jev 智能路由](#jev-智能路由)
 - **Agent 互调** — agent 在回复里写独立行 `@<agent>: <任务>` 即可调度另一个 agent，也可用 `nexus ask` CLI 或 `POST /api/agent/ask`（深度上限 4，防循环）
 - **共享记忆** — `node:sqlite` 事件溯源存储；`/remember`、agent 回复里的 `MEMO[kind]:` 行自动入库、按相关度召回注入 prompt、`/distill` 蒸馏候选记忆 + 审批流、完整的管理界面
 - **会话管理** — 恢复历史会话（`@claude /sessions`、`/resume <前缀>`），per-agent 会话跨重启续接
@@ -113,6 +114,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | `color` | ✓ | 主题色（hex） |
 | `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` \| `hermes` |
 | `desc` | | 副标题 |
+| `routeDesc` | | Jev 路由用的职责描述（≤160 字）——写这个 agent **干什么** |
 | `modelHint` | | 设置面板里模型输入框的提示语 |
 | `ctxChars` | | 共享记忆注入预算字符数（0 = 关闭，默认 900） |
 | `cwd` | | agent 进程的工作目录 |
@@ -139,7 +141,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agent-nexus.plist
 | 重置会话 | 窗口右上角 RESET，或 `@agent /clear` |
 | 附件 | 📎 按钮 / 拖拽 / 粘贴 |
 
-斜杠命令——hub 层（随处可用）：`/remember` `/forget` `/memories` `/distill` `/clearall`。
+斜杠命令——hub 层（随处可用）：`/remember` `/forget` `/memories` `/distill` `/clearall` `/router`。
 agent 层（需 `@agent` 前缀）：claude 与 codex 支持 `/sessions` `/resume <前缀>` `/fork` `/status` `/clear` `/stop`；dsh 与 openclaw 支持 `/status` `/clear` `/stop`；hermes 支持 `/sessions` `/resume <前缀>` `/status` `/clear` `/stop`。真终端窗口里斜杠命令会直接打进 TUI。
 
 ## iPhone 遥控键盘
@@ -150,6 +152,28 @@ agent 层（需 `@agent` 前缀）：claude 与 codex 支持 `/sessions` `/resum
 - 顶部 agent 标签选择输入目标窗口；软键盘回车往 TUI 草稿里键入换行，固定 ⏎ 键提交发送，ESC / ← ↑ ↓ → 负责 TUI 导航
 - 📎 上传文件（≤50MB）并把路径直接键入终端草稿——补上指令后按 ⏎ 发送
 - 手机是纯输入客户端：不接收任何终端输出，不会给已繁忙的会话增加负担。手机连上后 deck 上的 📱 键会高亮，弹层里还能看到各窗口挂载了几台手机
+
+## Jev 智能路由
+
+默认情况下，不带 `@目标` 的消息会**广播给所有 agent**。开启智能路由后，deck 会先问 [Jev](https://typesafe.ai)——TypeSafe 的 System One 模型，专做快速、结构化、带校准置信度的决策——这条消息该交给谁，然后只发给那一个。
+
+- **置信度门控** — 每次路由都带 confidence；低于阈值（或 Jev 自己选了"广播"，比如闲聊、需要多 agent 协作的任务）就按原样广播。路由出错也一律回退广播——deck 永远不会吃掉你的消息
+- **快且几乎免费** — 一次路由约 100ms、成本不到一分钱（只计 input tokens，Jev 输出不计费）
+- **per-agent `routeDesc`** — 路由依据是 `agents.json` 里每个 agent 的 `routeDesc` 职责描述（见[配置表](#配置你的团队)）；要写这个 agent **干什么**，而不是它**是什么**
+- **运行时开关** — 任意窗口输入 `/router on|off` 切换，`/router` 查看状态
+
+配置——`~/.agent-nexus/router.json`：
+
+```json
+{
+  "enabled": true,
+  "model": "jev-latest",
+  "threshold": 0.55,
+  "proxy": "http://127.0.0.1:7897"
+}
+```
+
+API key 依次取自该文件的 `apiKey`、环境变量 `TYPESAFE_API_KEY`、`~/.config/typesafe/api_key`（到 [console.typesafe.ai](https://console.typesafe.ai) 申请）。`proxy` 可选（默认 `http://127.0.0.1:7897`，其次 `HTTPS_PROXY`）。带附件的消息始终广播不走路由。改完 `bin/nexus restart` 生效。
 
 ## Agent 互调
 
@@ -166,6 +190,7 @@ agent 之间互相调度有三种方式：
 | 路径 | 内容 |
 |---|---|
 | `~/.agent-nexus/agents.json` | 团队阵容 |
+| `~/.agent-nexus/router.json` | Jev 智能路由配置（可选） |
 | `~/.agent-nexus/settings.json` | 模型、参数、主题、透明度 |
 | `~/.agent-nexus/state.json` | 消息历史与会话 |
 | `~/.agent-nexus/nexus.db` | 共享记忆（SQLite） |
@@ -194,6 +219,7 @@ agent 之间互相调度有三种方式：
 server/
   index.mjs            # HTTP + SSE + WS 服务（127.0.0.1:7700）
   hub.mjs              # 消息路由、per-agent 队列、调度解析、斜杠命令、蒸馏作业
+  router.mjs           # Jev（System One）无 @ 消息智能路由
   terminal.mjs         # node-pty 真终端（bracketed paste、cc-switch 模型环境注入）
   agents-config.mjs    # 阵容加载（~/.agent-nexus/agents.json）
   memory.mjs           # 共享记忆（node:sqlite，事件溯源）

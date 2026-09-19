@@ -2,9 +2,9 @@
 
 **One browser tab to command your whole team of local CLI agents.**
 
-NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, Codex, DeepSeek Harness, OpenClaw, Hermes, or your own — behind a single cyberpunk WebUI: broadcast or @-target instructions, watch every agent in its own live window, let agents dispatch each other, and share a collective memory across the team.
+NEXUS is a local command deck that puts any mix of CLI agents — Claude Code, Codex, DeepSeek Harness, OpenClaw, Hermes, or your own — behind a single cyberpunk WebUI: broadcast or @-target instructions, watch every agent in its own live window, let agents dispatch each other, and share a collective memory across the team. With a [TypeSafe Jev](https://typesafe.ai) key, unaddressed messages are routed to the right agent by a System One model instead of broadcast blindly.
 
-![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
+[![smart routing](https://img.shields.io/badge/smart_routing-TypeSafe_Jev-00f0ff)](https://typesafe.ai) ![stack](https://img.shields.io/badge/stack-Node%20ESM%20%2B%20node--pty-00f0ff) ![platform](https://img.shields.io/badge/platform-macOS-888) ![license](https://img.shields.io/badge/license-MIT-9be7d8)
 
 English | [中文](README.zh-CN.md)
 
@@ -16,6 +16,7 @@ English | [中文](README.zh-CN.md)
 - **Real terminal mode** — agents marked `terminal: true` embed a real interactive TUI via node-pty + xterm.js (e.g. a full Claude Code session you can also type into directly); explicit `cmd`/`args` supported (e.g. `openclaw tui`)
 - **Live process streaming** — adapters can stream their working (not just the final reply): the dsh adapter listens to the running `dsh web` event stream and renders a live CoT transcript (reasoning + tool calls), frozen into a collapsible block when the reply lands
 - **Broadcast & targeting** — send to everyone, or `@claude review this diff` to one; bottom chips make targeting one tap
+- **Smart routing by [TypeSafe Jev](https://typesafe.ai)** *(optional)* — messages without an @-mention are classified by Jev, a System One decision model (~100ms, calibrated confidence), and unicasted to the best-matching agent; low confidence falls back to broadcast. See [Smart routing](#smart-routing-with-jev)
 - **Agent-to-agent dispatch** — an agent can task another by writing `@<agent>: <task>` on its own line, via the `nexus ask` CLI, or `POST /api/agent/ask` (depth-capped to prevent loops)
 - **Shared memory** — event-sourced `node:sqlite` store; `/remember`, `MEMO[kind]:` capture from agent replies, relevance-based recall injected into prompts, `/distill` staged candidates with an approval flow, full management UI
 - **Sessions** — resume past conversations (`@claude /sessions`, `/resume <prefix>`), per-agent session continuity across restarts
@@ -113,6 +114,7 @@ Day-to-day control: `bin/nexus start | stop | restart | logs` — logs live at `
 | `color` | ✓ | Accent color (hex) |
 | `adapter` | ✓ | `claude` \| `codex` \| `dsh` \| `openclaw` \| `hermes` |
 | `desc` | | Subtitle |
+| `routeDesc` | | Responsibility blurb used by the Jev router (≤160 chars) — describe what the agent is *for* |
 | `modelHint` | | Placeholder for the model field in Settings |
 | `ctxChars` | | Shared-memory injection budget (0 = off, default 900) |
 | `cwd` | | Working directory for the agent process |
@@ -139,7 +141,7 @@ Everything else — per-agent model & extra CLI args, theme, focus opacity — i
 | Reset a session | RESET in the window header, or `@agent /clear` |
 | Attach files | 📎 button, drag & drop, or paste |
 
-Slash commands — hub-level (work anywhere): `/remember` `/forget` `/memories` `/distill` `/clearall`.
+Slash commands — hub-level (work anywhere): `/remember` `/forget` `/memories` `/distill` `/clearall` `/router`.
 Agent-level (prefix with `@agent`): claude & codex support `/sessions` `/resume <prefix>` `/fork` `/status` `/clear` `/stop`; dsh & openclaw support `/status` `/clear` `/stop`; hermes supports `/sessions` `/resume <prefix>` `/status` `/clear` `/stop`. In terminal windows, slash commands are typed straight into the TUI.
 
 ## iPhone as a remote keyboard
@@ -150,6 +152,28 @@ Typing into a terminal on an iPad is cramped — let your iPhone be the keyboard
 - Agent tabs choose which terminal receives input; soft-keyboard return types a newline into the TUI draft, the fixed ⏎ key submits, and ESC / arrows cover TUI navigation
 - 📎 uploads a file (≤ 50 MB) and types its path into the terminal draft — add instructions, hit ⏎
 - The phone is an input-only client: it receives no terminal output, so it adds no load to an already-busy session. The 📱 key on the deck glows while a phone is connected, and its popover shows which windows have phones attached
+
+## Smart routing with Jev
+
+By default, a message with no `@target` goes to **every** agent. With smart routing enabled, the deck asks [Jev](https://typesafe.ai) — TypeSafe's System One model for fast, structured, calibrated decisions — which agent should handle it, and sends it there alone.
+
+- **Calibrated confidence gating** — each route comes with a confidence score; below the threshold (or when Jev itself picks "broadcast", e.g. chit-chat or multi-agent tasks) the message broadcasts as before. Router errors fail open to broadcast — the deck never eats a message
+- **Fast and nearly free** — a routing call adds ~100ms and fractions of a cent (input tokens only; Jev outputs are unmetered)
+- **Per-agent `routeDesc`** — routing keys off each agent's `routeDesc` responsibility blurb in `agents.json` (see the [config table](#configure-your-team)); write what the agent is *for*, not what it *is*
+- **Runtime toggle** — `/router on|off` in any window, `/router` shows status
+
+Setup — `~/.agent-nexus/router.json`:
+
+```json
+{
+  "enabled": true,
+  "model": "jev-latest",
+  "threshold": 0.55,
+  "proxy": "http://127.0.0.1:7897"
+}
+```
+
+The API key comes from `apiKey` in that file, `TYPESAFE_API_KEY`, or `~/.config/typesafe/api_key` (get one at [console.typesafe.ai](https://console.typesafe.ai)). `proxy` is optional (default `http://127.0.0.1:7897`, or `HTTPS_PROXY`). Messages with attachments always broadcast. Restart with `bin/nexus restart` after changing the file.
 
 ## Agent-to-agent dispatch
 
@@ -166,6 +190,7 @@ Terminal agents (e.g. a live Claude Code TUI) receive tasks as typed input — t
 | Path | Contents |
 |---|---|
 | `~/.agent-nexus/agents.json` | Your team roster |
+| `~/.agent-nexus/router.json` | Jev smart-routing config (optional) |
 | `~/.agent-nexus/settings.json` | Models, args, theme, opacity |
 | `~/.agent-nexus/state.json` | Message history & sessions |
 | `~/.agent-nexus/nexus.db` | Shared memory (SQLite) |
@@ -194,6 +219,7 @@ To tell machines apart on a home screen, set `NEXUS_ICON_THEME=light` for a ligh
 server/
   index.mjs            # HTTP + SSE + WS service (127.0.0.1:7700)
   hub.mjs              # routing, per-agent queues, dispatch, slash commands, distill jobs
+  router.mjs           # Jev (System One) smart routing for unmentioned messages
   terminal.mjs         # node-pty real terminals (bracketed paste, cc-switch model env)
   agents-config.mjs    # roster loading (~/.agent-nexus/agents.json)
   memory.mjs           # shared memory (node:sqlite, event-sourced)
